@@ -2,7 +2,7 @@
 
 > **Aplikasi Statistik Daerah Offline-First untuk Android**
 > 
-> Built with Laravel 10 + Livewire 3 + NativePHP
+> Built with Laravel 11 + Livewire 3 + NativePHP
 
 ---
 
@@ -24,7 +24,7 @@
 
 | Layer | Technology |
 |-------|-----------|
-| **Backend** | Laravel 10 |
+| **Backend** | Laravel 11 |
 | **Frontend** | Livewire 3 + Blade |
 | **CSS** | Tailwind CSS 3 |
 | **Database** | SQLite (offline) |
@@ -36,7 +36,7 @@
 
 ### Prerequisites
 
-- PHP 8.1 or higher
+- PHP 8.3 or higher
 - Composer
 - Node.js 18+ (untuk build Tailwind lokal)
 - SQLite extension enabled

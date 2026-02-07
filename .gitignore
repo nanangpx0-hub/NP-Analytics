@@ -3,6 +3,7 @@
 /public/hot
 /public/storage
 /storage/*.key
+/storage/android-temp*
 /vendor
 .env
 .env.backup
@@ -16,3 +17,9 @@ yarn-error.log
 /.fleet
 /.idea
 /.vscode
+
+# Credential files (keystores, private keys, etc.)
+/credentials/
+
+# NativePHP build artifacts
+/nativephp/
