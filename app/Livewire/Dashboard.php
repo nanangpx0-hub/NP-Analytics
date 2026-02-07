@@ -23,8 +23,12 @@ class Dashboard extends Component
             ->pluck('year')
             ->toArray();
 
+        if (empty($this->availableYears)) {
+            $this->availableYears = [(int) date('Y')];
+        }
+
         // Set default to latest year
-        $this->selectedYear = $this->availableYears[0] ?? date('Y');
+        $this->selectedYear = $this->availableYears[0];
     }
 
     public function render()

@@ -2,6 +2,16 @@
 
 use Illuminate\Support\Str;
 
+$defaultSqlitePath = database_path('database.sqlite');
+$envSqlitePath = env('DB_DATABASE');
+
+// Avoid Windows drive-letter paths when running on non-Windows (e.g. Android/Linux)
+if ($envSqlitePath && PHP_OS_FAMILY !== 'Windows' && preg_match('/^[A-Za-z]:[\\\\\\/]/', $envSqlitePath)) {
+    $envSqlitePath = null;
+}
+
+$sqliteDatabasePath = $envSqlitePath ?: $defaultSqlitePath;
+
 return [
     'default' => env('DB_CONNECTION', 'sqlite'),
     
@@ -9,7 +19,7 @@ return [
         'sqlite' => [
             'driver' => 'sqlite',
             'url' => env('DATABASE_URL'),
-            'database' => env('DB_DATABASE', database_path('database.sqlite')),
+            'database' => $sqliteDatabasePath,
             'prefix' => '',
             'foreign_key_constraints' => env('DB_FOREIGN_KEYS', true),
         ],
