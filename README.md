@@ -1,0 +1,289 @@
+# 📊 NP Analytics
+
+> **Aplikasi Statistik Daerah Offline-First untuk Android**
+> 
+> Built with Laravel 10 + Livewire 3 + NativePHP
+
+---
+
+## 🎯 About
+
+**NP Analytics** adalah aplikasi mobile Android untuk menampilkan dan menganalisis indikator statistik daerah secara offline. Aplikasi ini menggunakan **Smart Trend Logic** untuk menampilkan warna trend (hijau/merah) secara otomatis berdasarkan jenis indikator.
+
+### Key Features
+
+✨ **Offline-First** - Semua data tersimpan di SQLite lokal  
+🎨 **Smart Trend Logic** - Warna otomatis (hijau = bagus, merah = buruk)  
+📱 **Mobile-Ready** - Optimized untuk NativePHP Android wrapper  
+🚀 **Fast & Responsive** - Livewire 3 + Blade components  
+🔍 **Advanced Filtering** - Cari berdasarkan kategori, tahun, keyword  
+
+---
+
+## 🛠️ Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| **Backend** | Laravel 10 |
+| **Frontend** | Livewire 3 + Blade |
+| **CSS** | Tailwind CSS 3 |
+| **Database** | SQLite (offline) |
+| **Mobile Wrapper** | NativePHP (Alpha/Beta) |
+
+---
+
+## 🚀 Installation
+
+### Prerequisites
+
+- PHP 8.1 or higher
+- Composer
+- Node.js 18+ (untuk build Tailwind lokal)
+- SQLite extension enabled
+
+### Setup Steps
+
+1. **Clone/Extract ke direktori project**
+   ```bash
+   cd "e:\laragon\www\NP Analytics"
+   ```
+
+2. **Install Dependencies (PHP)**
+   ```bash
+   composer install
+   ```
+
+3. **Install Dependencies (Frontend)**
+   ```bash
+   npm install
+   ```
+
+4. **Build Assets (Tailwind)**
+   ```bash
+   npm run dev
+   ```
+   Untuk production/offline bundle:
+   ```bash
+   npm run build
+   ```
+
+5. **Configure Environment**
+   ```bash
+   cp .env.example .env
+   php artisan key:generate
+   ```
+
+6. **Setup Database (SQLite)**
+   
+   Edit `.env`:
+   ```env
+   DB_CONNECTION=sqlite
+   DB_DATABASE=/absolute/path/to/database/database.sqlite
+   ```
+
+   Create SQLite file:
+   ```bash
+   touch database/database.sqlite
+   ```
+
+7. **Run Migrations**
+   ```bash
+   php artisan migrate
+   ```
+
+8. **Seed Database dengan Data Sample**
+   ```bash
+   php artisan db:seed
+   ```
+
+9. **Run Development Server**
+   ```bash
+   php artisan serve
+   ```
+
+10. **Akses Aplikasi**
+   
+   Buka browser: `http://localhost:8000`
+
+---
+
+## 📁 Project Structure
+
+```
+NP Analytics/
+├── app/
+│   ├── Livewire/
+│   │   ├── Dashboard.php          # Dashboard component
+│   │   └── IndicatorList.php      # Indicator list component
+│   └── Models/
+│       ├── Category.php            # Category model
+│       ├── Indicator.php           # Indicator model (Smart Trend Logic)
+│       └── Phenomenon.php          # Phenomenon model
+├── database/
+│   ├── migrations/                 # Database migrations
+│   ├── seeders/                    # Database seeders (14 indikator)
+│   └── factories/                  # Model factories
+├── resources/
+│   └── views/
+│       ├── layouts/
+│       │   └── app.blade.php       # Main layout
+│       ├── components/
+│       │   └── indicator-card.blade.php  # Reusable card component
+│       └── livewire/
+│           ├── dashboard.blade.php
+│           └── indicator-list.blade.php
+├── routes/
+│   └── web.php                     # Web routes
+└── docs/
+    ├── SEEDER_GUIDE.md             # Database seeding guide
+    └── Blueprint NP Analytics.md    # Project blueprint
+```
+
+---
+
+## 🎨 Branding & Design
+
+### Color Palette
+
+| Color | Hex Code | Usage |
+|-------|----------|-------|
+| **Navy Blue** | `#0f172a` | Primary, headers, navigation |
+| **Amber Gold** | `#f59e0b` | Accent, badges, highlights |
+| **Green** | `#10b981` | Positive trends |
+| **Red** | `#ef4444` | Negative trends |
+
+### Design Principles
+
+- ✅ Professional & Minimalist
+- ✅ Mobile-first responsive design
+- ✅ Touch-friendly (48×48dp tap targets)
+- ✅ High contrast for readability
+
+---
+
+## 📊 Smart Trend Logic
+
+Aplikasi ini menggunakan logika cerdas untuk menampilkan warna trend:
+
+### Indikator Positif (`is_higher_better: true`)
+```
+Contoh: PDRB, Produksi Padi, IPM
+• Trend NAIK (+)   → 🟢 HIJAU (bagus)
+• Trend TURUN (-)  → 🔴 MERAH (buruk)
+```
+
+### Indikator Negatif (`is_higher_better: false`)
+```
+Contoh: Kemiskinan, Inflasi, Pengangguran
+• Trend NAIK (+)   → 🔴 MERAH (buruk)
+• Trend TURUN (-)  → 🟢 HIJAU (bagus)
+```
+
+---
+
+## 📚 Usage
+
+### Dashboard
+
+URL: `/dashboard`
+
+Menampilkan:
+- 4 statistik cards (Kategori, Indikator, Trend Positif/Negatif)
+- Indikator per kategori dalam grid
+- Filter berdasarkan tahun
+
+### Daftar Indikator
+
+URL: `/indicators`
+
+Fitur:
+- 🔍 Search indikator by title
+- 🗂️ Filter by category
+- 📅 Filter by year
+- 📱 Responsive grid layout
+
+---
+
+## 🗄️ Database Schema
+
+### Tables
+
+1. **categories**
+   - `id`, `name`, `icon`, `timestamps`
+
+2. **indicators**
+   - `id`, `category_id` (FK), `title`, `value`, `unit`, `year`
+   - `trend`, `is_higher_better`, `description`, `image_path`
+   - `timestamps`
+
+3. **phenomena**
+   - `id`, `indicator_id` (FK), `title`, `description`
+   - `impact` (enum: positive/negative)
+   - `timestamps`
+
+### Sample Data
+
+Seeder menyediakan:
+- **6 Kategori**: Ekonomi, Sosial, Pertanian, Kependudukan, Industri, Infrastruktur
+- **14 Indikator**: PDRB, IPM, Kemiskinan, Produksi Padi, dll.
+- **10 Phenomena**: Dampak positif/negatif terhadap indikator
+
+📖 [Lihat SEEDER_GUIDE.md](docs/SEEDER_GUIDE.md) untuk detail lengkap
+
+---
+
+## 🧪 Testing
+
+### Run Tinker untuk Cek Data
+
+```bash
+php artisan tinker
+```
+
+```php
+// Cek jumlah data
+App\Models\Category::count();      // Should be 6
+App\Models\Indicator::count();     // Should be 14
+App\Models\Phenomenon::count();    // Should be 10
+
+// Lihat data
+App\Models\Category::all()->pluck('name');
+App\Models\Indicator::where('is_higher_better', false)->get();
+```
+
+---
+
+## 📱 Build for Android (NativePHP)
+
+Coming soon...
+
+---
+
+## 🤝 Contributing
+
+This is a private project by **Nanang Pamungkas**. If you have suggestions, feel free to contact the author.
+
+---
+
+## 📄 License
+
+Copyright © 2026 **Nanang Pamungkas**. All rights reserved.
+
+---
+
+## 👨‍💻 Author
+
+**Nanang Pamungkas**
+- Role: Developer & Analyst
+- Project: NP Analytics - Offline Statistical Analysis App
+- Stack: Laravel + Livewire + NativePHP
+
+---
+
+## 📞 Support
+
+Untuk pertanyaan atau issue, silakan buat issue di repository atau hubungi author.
+
+---
+
+**Built with ❤️ using Laravel & NativePHP**

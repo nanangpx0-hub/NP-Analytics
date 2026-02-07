@@ -1,0 +1,6 @@
+"Indikator","Satuan","Data 2024","Tahun","Trend (%)","Arah Trend","Is Higher Better?","Sumber","Deskripsi"
+"Inflasi Kota Jember (y-on-y)","Persen (%)",2.87,2024,-0.45,"Turun","FALSE","BPS Jember (Des 2024)","Tingkat inflasi tahunan (year-on-year) Kota Jember pada Desember 2024. Penurunan didorong oleh stabilitas harga komoditas pangan utama."
+"Produksi Padi","Ton GKG",612450.00,2024,3.25,"Naik","TRUE","BPS Jember (Angka Sementara 2024)","Total produksi padi dalam bentuk Gabah Kering Giling. Kenaikan terjadi karena produktivitas lahan yang membaik meskipun luas panen sedikit berkurang."
+"PDRB ADHK (Pertumbuhan Ekonomi)","Persen (%)",4.93,2023,0.40,"Naik","TRUE","BPS Jember (2023)","Laju pertumbuhan ekonomi Kabupaten Jember tahun 2023, diukur dari PDRB Atas Dasar Harga Konstan."
+"Tingkat Pengangguran Terbuka (TPT)","Persen (%)",4.01,2023,-0.92,"Turun","FALSE","BPS Jember (Sakernas Agustus 2023)","Persentase angkatan kerja yang tidak bekerja dan sedang mencari pekerjaan. Penurunan TPT menunjukkan perbaikan kondisi ketenagakerjaan pasca pandemi."
+"Indeks Pembangunan Manusia (IPM)","Poin",74.24,2023,0.85,"Naik","TRUE","BPS Jember (2023)","Indikator komposit yang mengukur kualitas hidup manusia dari aspek kesehatan, pendidikan, dan standar hidup layak."
