@@ -6,10 +6,13 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Str;
 
 class Indicator extends Model
 {
     use HasFactory;
+    use SoftDeletes;
 
     /**
      * The attributes that are mass assignable.
@@ -17,6 +20,7 @@ class Indicator extends Model
      * @var array<int, string>
      */
     protected $fillable = [
+        'uuid',
         'category_id',
         'title',
         'value',
@@ -39,6 +43,34 @@ class Indicator extends Model
         'is_higher_better' => 'boolean',
         'year' => 'integer',
     ];
+
+    protected static function booted(): void
+    {
+        static::creating(function (Indicator $indicator): void {
+            if (empty($indicator->uuid)) {
+                $indicator->uuid = (string) Str::uuid();
+            }
+        });
+
+        static::deleting(function (Indicator $indicator): void {
+            if ($indicator->isForceDeleting()) {
+                return;
+            }
+
+            $indicator->phenomena()->each(function (Phenomenon $phenomenon): void {
+                $phenomenon->delete();
+            });
+        });
+
+        static::restoring(function (Indicator $indicator): void {
+            $indicator->phenomena()
+                ->withTrashed()
+                ->get()
+                ->each(function (Phenomenon $phenomenon): void {
+                    $phenomenon->restore();
+                });
+        });
+    }
 
     /**
      * Get the category that owns the indicator.

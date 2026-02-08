@@ -5,10 +5,13 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Str;
 
 class Phenomenon extends Model
 {
     use HasFactory;
+    use SoftDeletes;
 
     /**
      * The table associated with the model.
@@ -24,6 +27,7 @@ class Phenomenon extends Model
      * @var array<int, string>
      */
     protected $fillable = [
+        'uuid',
         'indicator_id',
         'title',
         'description',
@@ -40,6 +44,15 @@ class Phenomenon extends Model
     protected $casts = [
         'order' => 'integer',
     ];
+
+    protected static function booted(): void
+    {
+        static::creating(function (Phenomenon $phenomenon): void {
+            if (empty($phenomenon->uuid)) {
+                $phenomenon->uuid = (string) Str::uuid();
+            }
+        });
+    }
 
     /**
      * Get the indicator that owns this phenomenon.

@@ -37,9 +37,12 @@
 ### Prerequisites
 
 - PHP 8.3 or higher
+- PHP binary (Laragon): `E:\laragon\bin\php\php-8.5.1-nts-Win32-vs17-x64\php.exe`
 - Composer
 - Node.js 18+ (untuk build Tailwind lokal)
 - SQLite extension enabled
+
+Catatan: Path PHP lokal juga disimpan di `.env` sebagai `PHP_BINARY` agar konsisten dengan tooling lokal.
 
 ### Setup Steps
 
@@ -47,6 +50,8 @@
    ```bash
    cd "e:\laragon\www\NP Analytics"
    ```
+
+   Jika `php` belum ada di PATH, gunakan path di atas saat menjalankan perintah. Contoh: `E:\laragon\bin\php\php-8.5.1-nts-Win32-vs17-x64\php.exe artisan serve`.
 
 2. **Install Dependencies (PHP)**
    ```bash
@@ -104,6 +109,25 @@
 10. **Akses Aplikasi**
    
    Buka browser: `http://localhost:8000`
+
+---
+
+## 🖥️ Backend Server (PHP 8.2)
+
+Untuk kebutuhan update data di server dan sinkronisasi dengan aplikasi mobile, backend **dipisah sebagai repo terpisah**.
+Lokasi lokal saat ini: `E:\laragon\www\np-analytics-backend`
+
+**Setup singkat (di repo backend):**
+1. `cd E:\laragon\www\np-analytics-backend`
+2. `composer install`
+3. `cp .env.example .env`
+4. Atur `DB_*`, `SYNC_API_KEY`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`
+5. `php artisan key:generate`
+6. `php artisan migrate --seed`
+7. `php artisan serve`
+
+Admin panel: `http://localhost:8000/login`  
+Sync API: `GET /api/sync/pull` dan `POST /api/sync/push`
 
 ---
 
@@ -256,6 +280,18 @@ App\Models\Indicator::where('is_higher_better', false)->get();
 ## 📱 Build for Android (NativePHP)
 
 Coming soon...
+
+---
+
+## 🔄 Sync (Android <-> Server)
+
+Aplikasi mendukung sinkronisasi dua arah:
+- Edit data di HP (offline) lalu sync ke server saat online
+- Update data di server lalu tarik ke HP saat sync
+
+Set `SYNC_BASE_URL` di `.env` aplikasi mobile agar mengarah ke backend server.
+
+Panduan lengkap ada di: `docs/SYNC_GUIDE.md`
 
 ---
 

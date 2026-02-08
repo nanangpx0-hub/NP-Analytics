@@ -18,6 +18,9 @@ yarn-error.log
 /.idea
 /.vscode
 
+# Backend repo (separate git repository)
+/backend/
+
 # Credential files (keystores, private keys, etc.)
 /credentials/
 
