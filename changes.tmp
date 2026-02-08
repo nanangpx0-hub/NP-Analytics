@@ -1,0 +1,5 @@
+ M .env.example
+?? app/Services/
+?? auto-sync.bat
+?? changes.tmp
+?? database/migrations/2026_02_08_200010_create_sync_states_table.php
