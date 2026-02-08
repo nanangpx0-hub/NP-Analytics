@@ -9,6 +9,7 @@ use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Schema;
 
 class SyncService
 {
@@ -60,6 +61,10 @@ class SyncService
 
     public function getLastSyncTime(): ?Carbon
     {
+        if (!Schema::hasTable('sync_states')) {
+            return null;
+        }
+
         $value = DB::table('sync_states')->where('key', 'last_server_time')->value('value');
         if (!$value) {
             return null;
@@ -74,6 +79,10 @@ class SyncService
 
     private function setLastSyncTime(string $value): void
     {
+        if (!Schema::hasTable('sync_states')) {
+            return;
+        }
+
         DB::table('sync_states')->updateOrInsert(
             ['key' => 'last_server_time'],
             ['value' => $value, 'updated_at' => now(), 'created_at' => now()]
