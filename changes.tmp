@@ -1,5 +1,1 @@
- M app/Services/SyncService.php
  M changes.tmp
- M resources/views/components/layouts/app.blade.php
- M resources/views/layouts/app.blade.php
-?? resources/views/livewire/sync-button.blade.php
