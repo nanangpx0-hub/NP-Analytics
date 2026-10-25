@@ -80,8 +80,8 @@ Implikasi arsitektur:
 ## Dependensi Teknologi
 | Layer | Teknologi | Versi/Status | Catatan |
 | --- | --- | --- | --- |
-| Runtime | PHP | ^8.1 | Requirement composer |
-| Backend | Laravel | ^10.0 | Framework utama |
+| Runtime | PHP | ^8.3 | Requirement composer |
+| Backend | Laravel | ^11.0 | Framework utama |
 | UI Reaktif | Livewire | ^3.0 | Komponen server-driven |
 | Auth/API | Sanctum | ^3.2 | Belum digunakan pada routing saat ini |
 | HTTP Client | Guzzle | ^7.2 | Belum tampak dipakai |

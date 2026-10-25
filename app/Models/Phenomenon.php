@@ -32,8 +32,14 @@ class Phenomenon extends Model
         'title',
         'description',
         'impact',
-        'source',  // Field baru: sumber referensi
-        'order',   // Field baru: urutan tampilan
+        'source',
+        'order',
+        'insight_type',
+        'source_document',
+        'source_page',
+        'published_at',
+        'author',
+        'quality_note',
     ];
 
     /**
@@ -43,6 +49,7 @@ class Phenomenon extends Model
      */
     protected $casts = [
         'order' => 'integer',
+        'published_at' => 'date',
     ];
 
     protected static function booted(): void

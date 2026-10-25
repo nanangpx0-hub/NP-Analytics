@@ -12,9 +12,7 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         $this->call([
-            CategorySeeder::class,
-            IndicatorSeeder::class,
-            PhenomenonSeeder::class,
+            MasterStrategicDataJemberSeeder::class,
         ]);
     }
 }

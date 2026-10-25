@@ -23,6 +23,25 @@ yarn-error.log
 
 # Credential files (keystores, private keys, etc.)
 /credentials/
+/android-keystore/
+/keys/
 
-# NativePHP build artifacts
+# Build outputs and binaries
+/dist/
+/build-output/
+
+# Local database (recreated via migrate + seed)
+/database/*.sqlite
+/database/*.sqlite-journal
+/database/*.sqlite-wal
+/database/*.sqlite-shm
+
+# Runtime cache
+/storage/framework/cache/*
+/storage/framework/testing/*
+
+# Local tooling artifacts
+/changes.tmp
+
+# NativePHP generated project (patched files are added selectively)
 /nativephp/

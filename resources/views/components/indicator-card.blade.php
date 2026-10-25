@@ -60,9 +60,9 @@
     }
     
     // Size variants
-    $cardPadding = $size === 'sm' ? 'p-4' : 'p-5';
-    $titleSize = $size === 'sm' ? 'text-base' : 'text-lg';
-    $valueSize = $size === 'sm' ? 'text-2xl md:text-3xl' : 'text-3xl md:text-4xl';
+    $cardPadding = $size === 'sm' ? 'p-4' : 'p-4';
+    $titleSize = $size === 'sm' ? 'text-base' : 'text-base';
+    $valueSize = $size === 'sm' ? 'text-2xl md:text-3xl' : 'text-2xl sm:text-3xl';
     
     // Clickable variant
     $clickableClass = $clickable ? 'cursor-pointer hover:shadow-xl hover:-translate-y-1' : '';
@@ -71,13 +71,14 @@
     $detailUrl = $clickable ? route('indicators.show', $indicator->id) : '#';
 @endphp
 
-<a 
-    href="{{ $detailUrl }}" 
+<a
+    href="{{ $detailUrl }}"
+    @if($clickable) wire:navigate @endif
     {{ $attributes->merge(['class' => "block bg-brand-surface rounded-xl shadow-md transition-all duration-300 overflow-hidden border border-gray-100 {$clickableClass}"]) }}
     @if(!$clickable) onclick="return false;" @endif
 >
     {{-- Header Section with Brand Navy --}}
-    <div class="bg-brand-navy text-white px-5 py-4">
+    <div class="bg-brand-navy text-white px-4 py-3">
         <div class="flex items-start justify-between gap-3">
             {{-- Title Area --}}
             <div class="flex-1 min-w-0">
@@ -118,9 +119,9 @@
         {{-- Value Display --}}
         <div class="mb-4">
             <div class="flex items-baseline gap-2 flex-wrap">
-                <p class="font-extrabold {{ $valueSize }} text-brand-navy leading-none tracking-tight">
+                <data value="{{ $indicator->value }}" class="font-extrabold {{ $valueSize }} text-brand-navy leading-none tracking-tight">
                     {{ number_format($indicator->value, ($indicator->value == intval($indicator->value) ? 0 : 2), ',', '.') }}
-                </p>
+                </data>
                 <p class="text-base text-gray-600 font-semibold">
                     {{ $indicator->unit }}
                 </p>
@@ -150,7 +151,7 @@
                     
                     {{-- Percentage --}}
                     <span class="text-sm font-bold {{ $trendColor }}">
-                        {{ $indicator->trend > 0 ? '+' : '' }}{{ number_format($indicator->trend, 2, ',', '.') }}%
+                        {{ $indicator->trend > 0 ? '+' : '' }}<data value="{{ $indicator->trend }}">{{ number_format($indicator->trend, 2, ',', '.') }}%</data>
                     </span>
                     
                     {{-- Status Label --}}
@@ -163,7 +164,7 @@
         
         {{-- Description --}}
         @if(!empty($indicator->description))
-            <p class="text-sm text-gray-700 leading-relaxed line-clamp-3 mb-3">
+            <p class="text-sm text-gray-700 leading-relaxed line-clamp-2 mb-3">
                 {{ $indicator->description }}
             </p>
         @endif
@@ -185,8 +186,8 @@
         {{-- View Details Link (only if clickable) --}}
         @if($clickable)
             <div class="mt-4 pt-3 border-t border-gray-100">
-                <div class="flex items-center justify-between text-sm">
-                    <span class="text-gray-500">Lihat Detail Analisis</span>
+                <div class="flex items-center justify-between text-xs">
+                    <span class="text-gray-500">Lihat Detail</span>
                     <svg class="w-5 h-5 text-brand-gold transition-transform group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path>
                     </svg>

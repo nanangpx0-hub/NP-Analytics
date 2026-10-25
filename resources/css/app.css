@@ -1,3 +1,40 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+    html {
+        color-scheme: light;
+        -webkit-tap-highlight-color: transparent;
+    }
+}
+
+@layer components {
+    /* NativePHP injects --inset-* from WindowInsets; env() covers browser/PWA */
+    .safe-area-top {
+        padding-top: max(var(--inset-top, 0px), env(safe-area-inset-top, 0px));
+    }
+
+    .safe-area-bottom {
+        padding-bottom: max(var(--inset-bottom, 0px), env(safe-area-inset-bottom, 0px));
+    }
+
+    .livewire-progress-top {
+        top: max(var(--inset-top, 0px), env(safe-area-inset-top, 0px));
+    }
+
+    .app-main-bottom-safe {
+        padding-bottom: calc(7rem + max(var(--inset-bottom, 0px), env(safe-area-inset-bottom, 0px)));
+    }
+}
+
+@media (min-width: 768px) {
+    .app-main-bottom-safe {
+        padding-bottom: 2.5rem;
+    }
+}
+
+@keyframes slide {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(300%); }
+}

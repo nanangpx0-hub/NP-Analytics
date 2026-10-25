@@ -4,16 +4,22 @@ namespace App\Livewire;
 
 use App\Models\Category;
 use App\Models\Indicator;
+use App\Services\GeminiInsightService;
 use Livewire\Component;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
+use Livewire\Attributes\Url;
 
-#[Layout('components.layouts.app')]
+#[Layout('layouts.app')]
 #[Title('Dashboard')]
 class Dashboard extends Component
 {
+    #[Url(as: 'year', except: '')]
     public $selectedYear;
+
     public $availableYears = [];
+
+    public ?array $aiInsight = null;
 
     public function mount()
     {
@@ -27,42 +33,89 @@ class Dashboard extends Component
             $this->availableYears = [(int) date('Y')];
         }
 
-        // Set default to latest year
-        $this->selectedYear = $this->availableYears[0];
+        // Set default to latest year with comprehensive indicators (2025 or 2026)
+        if (empty($this->selectedYear) || !in_array((int) $this->selectedYear, array_map('intval', $this->availableYears), true)) {
+            $this->selectedYear = $this->availableYears[0];
+        }
+    }
+
+    public function updatedSelectedYear(): void
+    {
+        $this->aiInsight = null;
+    }
+
+    public function generateAiInsight(GeminiInsightService $gemini): void
+    {
+        $categories = $this->categoriesForYear();
+
+        $this->aiInsight = $gemini->analyzeDashboard(
+            (int) $this->selectedYear,
+            $categories,
+            $this->buildStats($categories),
+            true,
+        );
     }
 
     public function render()
     {
-        $categories = Category::with(['indicators' => function ($query) {
-            $query->where('year', $this->selectedYear);
-        }])->get();
-
-        $stats = [
-            'total_categories' => Category::count(),
-            'total_indicators' => Indicator::where('year', $this->selectedYear)->count(),
-            'positive_trends' => Indicator::where('year', $this->selectedYear)
-                ->where(function ($q) {
-                    $q->where(function ($inner) {
-                        $inner->where('is_higher_better', true)->where('trend', '>', 0);
-                    })->orWhere(function ($inner) {
-                        $inner->where('is_higher_better', false)->where('trend', '<', 0);
-                    });
-                })->count(),
-            'negative_trends' => Indicator::where('year', $this->selectedYear)
-                ->where(function ($q) {
-                    $q->where(function ($inner) {
-                        $inner->where('is_higher_better', true)->where('trend', '<', 0);
-                    })->orWhere(function ($inner) {
-                        $inner->where('is_higher_better', false)->where('trend', '>', 0);
-                    });
-                })->count(),
-        ];
+        $categories = $this->categoriesForYear();
+        $stats = $this->buildStats($categories);
+        $gemini = app(GeminiInsightService::class);
+        // Jangan memakai nama kunci yang sama dengan properti publik: Livewire
+        // menggabungkan properti setelah data view sehingga nilai null menimpa cache.
+        $resolvedAiInsight = $this->aiInsight ?? $gemini->cachedForDashboard(
+            (int) $this->selectedYear,
+            $categories,
+            $stats,
+        );
 
         return view('livewire.dashboard', [
             'categories' => $categories,
             'stats' => $stats,
+            'resolvedAiInsight' => $resolvedAiInsight,
+            'geminiConfigured' => $gemini->isConfigured(),
         ])->layout('layouts.app', [
             'title' => 'Dashboard',
         ]);
+    }
+
+    private function categoriesForYear()
+    {
+        // Hanya kategori dengan indikator pada tahun terpilih, relasi dimuat sekali.
+        return Category::with(['indicators' => function ($query) {
+            $query->where('year', $this->selectedYear);
+        }])
+        ->whereHas('indicators', function ($query) {
+            $query->where('year', $this->selectedYear);
+        })
+        ->get();
+    }
+
+    private function buildStats($categories): array
+    {
+        $indicators = $categories->flatMap->indicators;
+
+        return [
+            'total_categories' => $categories->count(),
+            'total_indicators' => $indicators->count(),
+            'positive_trends' => $indicators->filter(function (Indicator $indicator): bool {
+                if ($indicator->trend === null) {
+                    return false;
+                }
+
+                return $indicator->is_higher_better
+                    ? $indicator->trend > 0
+                    : $indicator->trend < 0;
+            })->count(),
+            'negative_trends' => $indicators->filter(function (Indicator $indicator): bool {
+                if ($indicator->trend === null) {
+                    return false;
+                }
+
+                return $indicator->is_higher_better
+                    ? $indicator->trend < 0
+                    : $indicator->trend > 0;
+            })->count(),
+        ];
     }
 }

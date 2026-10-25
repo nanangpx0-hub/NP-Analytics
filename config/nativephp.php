@@ -148,7 +148,7 @@ return [
         |          'dark'  - Dark icons
         |
         */
-        'status_bar_style' => env('NATIVEPHP_ANDROID_STATUS_BAR_STYLE', 'auto'),
+        'status_bar_style' => env('NATIVEPHP_ANDROID_STATUS_BAR_STYLE', 'light'),
 
         /*
         |--------------------------------------------------------------------------
@@ -345,9 +345,9 @@ return [
         ],
         'android' => [
             'portrait' => true,
-            'upside_down' => false,
-            'landscape_left' => false,
-            'landscape_right' => false,
+            'upside_down' => true,
+            'landscape_left' => true,
+            'landscape_right' => true,
         ],
     ],
 ];

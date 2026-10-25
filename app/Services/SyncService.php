@@ -48,14 +48,18 @@ class SyncService
         $applyResult = $this->applyPull($pullResponse);
 
         $serverTime = $pullResponse['server_time'] ?? ($pushResponse['server_time'] ?? now()->toIso8601String());
-        $this->setLastSyncTime($serverTime);
+        $errors = array_merge($push['errors'], $pushResponse['errors'] ?? [], $applyResult['errors']);
+
+        if (empty($errors) && empty($pushResponse['conflicts'] ?? [])) {
+            $this->setLastSyncTime($serverTime);
+        }
 
         return [
             'server_time' => $serverTime,
             'pushed' => $pushResponse['applied'] ?? ['categories' => 0, 'indicators' => 0, 'phenomena' => 0],
             'pulled' => $applyResult['pulled'],
             'conflicts' => $pushResponse['conflicts'] ?? [],
-            'errors' => array_merge($push['errors'], $pushResponse['errors'] ?? [], $applyResult['errors']),
+            'errors' => $errors,
         ];
     }
 
@@ -143,6 +147,17 @@ class SyncService
                 'is_higher_better' => $indicator->is_higher_better,
                 'description' => $indicator->description,
                 'image_path' => $indicator->image_path,
+                'region_level' => $indicator->region_level,
+                'frequency' => $indicator->frequency,
+                'period_start' => $indicator->period_start?->toDateString(),
+                'period_end' => $indicator->period_end?->toDateString(),
+                'published_at' => $indicator->published_at?->toDateString(),
+                'source_document' => $indicator->source_document,
+                'source_table' => $indicator->source_table,
+                'source_page' => $indicator->source_page,
+                'revision' => $indicator->revision,
+                'quality_note' => $indicator->quality_note,
+                'preferred_direction' => $indicator->preferred_direction,
                 'updated_at' => $indicator->updated_at?->toIso8601String(),
                 'deleted_at' => $indicator->deleted_at?->toIso8601String(),
             ];
@@ -175,6 +190,12 @@ class SyncService
                 'impact' => $phenomenon->impact,
                 'source' => $phenomenon->source,
                 'order' => $phenomenon->order,
+                'insight_type' => $phenomenon->insight_type,
+                'source_document' => $phenomenon->source_document,
+                'source_page' => $phenomenon->source_page,
+                'published_at' => $phenomenon->published_at?->toDateString(),
+                'author' => $phenomenon->author,
+                'quality_note' => $phenomenon->quality_note,
                 'updated_at' => $phenomenon->updated_at?->toIso8601String(),
                 'deleted_at' => $phenomenon->deleted_at?->toIso8601String(),
             ];
@@ -197,58 +218,79 @@ class SyncService
 
     private function applyPull(array $payload): array
     {
-        $result = [
-            'pulled' => [
+        $pulled = [
+            'categories' => 0,
+            'indicators' => 0,
+            'phenomena' => 0,
+        ];
+        $errors = [];
+
+        try {
+            DB::transaction(function () use ($payload, &$pulled, &$errors): void {
+                $categoryMap = Category::withTrashed()->get()->keyBy('uuid');
+                $indicatorMap = Indicator::withTrashed()->get()->keyBy('uuid');
+                $phenomenonMap = Phenomenon::withTrashed()->get()->keyBy('uuid');
+
+                foreach ($payload['categories'] ?? [] as $item) {
+                    try {
+                        $this->applyCategoryPayload($item, $categoryMap);
+                        $pulled['categories']++;
+                    } catch (\Throwable $exception) {
+                        $errors[] = [
+                            'type' => 'category',
+                            'uuid' => $item['uuid'] ?? null,
+                            'message' => $exception->getMessage(),
+                        ];
+                    }
+                }
+
+                foreach ($payload['indicators'] ?? [] as $item) {
+                    try {
+                        $this->applyIndicatorPayload($item, $indicatorMap, $categoryMap);
+                        $pulled['indicators']++;
+                    } catch (\Throwable $exception) {
+                        $errors[] = [
+                            'type' => 'indicator',
+                            'uuid' => $item['uuid'] ?? null,
+                            'message' => $exception->getMessage(),
+                        ];
+                    }
+                }
+
+                foreach ($payload['phenomena'] ?? [] as $item) {
+                    try {
+                        $this->applyPhenomenonPayload($item, $phenomenonMap, $indicatorMap);
+                        $pulled['phenomena']++;
+                    } catch (\Throwable $exception) {
+                        $errors[] = [
+                            'type' => 'phenomenon',
+                            'uuid' => $item['uuid'] ?? null,
+                            'message' => $exception->getMessage(),
+                        ];
+                    }
+                }
+            });
+        } catch (\Throwable $exception) {
+            // Transaksi di-rollback, sehingga hitungan perubahan tidak valid.
+            $pulled = [
                 'categories' => 0,
                 'indicators' => 0,
                 'phenomena' => 0,
-            ],
-            'errors' => [],
+            ];
+            $errors[] = [
+                'type' => 'sync',
+                'uuid' => null,
+                'message' => $exception->getMessage(),
+            ];
+        }
+
+        return [
+            'pulled' => $pulled,
+            'errors' => $errors,
         ];
-
-        foreach ($payload['categories'] ?? [] as $item) {
-            try {
-                $this->applyCategoryPayload($item);
-                $result['pulled']['categories']++;
-            } catch (\Throwable $exception) {
-                $result['errors'][] = [
-                    'type' => 'category',
-                    'uuid' => $item['uuid'] ?? null,
-                    'message' => $exception->getMessage(),
-                ];
-            }
-        }
-
-        foreach ($payload['indicators'] ?? [] as $item) {
-            try {
-                $this->applyIndicatorPayload($item);
-                $result['pulled']['indicators']++;
-            } catch (\Throwable $exception) {
-                $result['errors'][] = [
-                    'type' => 'indicator',
-                    'uuid' => $item['uuid'] ?? null,
-                    'message' => $exception->getMessage(),
-                ];
-            }
-        }
-
-        foreach ($payload['phenomena'] ?? [] as $item) {
-            try {
-                $this->applyPhenomenonPayload($item);
-                $result['pulled']['phenomena']++;
-            } catch (\Throwable $exception) {
-                $result['errors'][] = [
-                    'type' => 'phenomenon',
-                    'uuid' => $item['uuid'] ?? null,
-                    'message' => $exception->getMessage(),
-                ];
-            }
-        }
-
-        return $result;
     }
 
-    private function applyCategoryPayload(array $payload): void
+    private function applyCategoryPayload(array $payload, $categoryMap): void
     {
         $uuid = $payload['uuid'] ?? null;
         if (!is_string($uuid) || $uuid === '') {
@@ -258,9 +300,10 @@ class SyncService
         $updatedAt = $this->parseTimestamp($payload['updated_at'] ?? null);
         $deletedAt = $this->parseTimestamp($payload['deleted_at'] ?? null);
 
-        $category = Category::withTrashed()->where('uuid', $uuid)->first();
+        $category = $categoryMap->get($uuid);
         if (!$category) {
             $category = new Category(['uuid' => $uuid]);
+            $categoryMap->put($uuid, $category);
         }
 
         if ($deletedAt) {
@@ -290,7 +333,7 @@ class SyncService
         $this->forceTimestamps($category, $updatedAt, null);
     }
 
-    private function applyIndicatorPayload(array $payload): void
+    private function applyIndicatorPayload(array $payload, $indicatorMap, $categoryMap): void
     {
         $uuid = $payload['uuid'] ?? null;
         if (!is_string($uuid) || $uuid === '') {
@@ -300,14 +343,15 @@ class SyncService
         $updatedAt = $this->parseTimestamp($payload['updated_at'] ?? null);
         $deletedAt = $this->parseTimestamp($payload['deleted_at'] ?? null);
 
-        $indicator = Indicator::withTrashed()->where('uuid', $uuid)->first();
+        $indicator = $indicatorMap->get($uuid);
         if (!$indicator) {
             $indicator = new Indicator(['uuid' => $uuid]);
+            $indicatorMap->put($uuid, $indicator);
         }
 
         if ($deletedAt) {
             if (!$indicator->exists) {
-                $this->fillIndicatorFields($indicator, $payload);
+                $this->fillIndicatorFields($indicator, $payload, $categoryMap);
                 $indicator->save();
             }
 
@@ -323,18 +367,18 @@ class SyncService
             $indicator->restore();
         }
 
-        $this->fillIndicatorFields($indicator, $payload);
+        $this->fillIndicatorFields($indicator, $payload, $categoryMap);
         $this->forceTimestamps($indicator, $updatedAt, null);
     }
 
-    private function fillIndicatorFields(Indicator $indicator, array $payload): void
+    private function fillIndicatorFields(Indicator $indicator, array $payload, $categoryMap): void
     {
         $categoryUuid = $payload['category_uuid'] ?? null;
         if (!is_string($categoryUuid) || $categoryUuid === '') {
             throw new \InvalidArgumentException('Missing category_uuid');
         }
 
-        $category = Category::withTrashed()->where('uuid', $categoryUuid)->first();
+        $category = $categoryMap->get($categoryUuid);
         if (!$category) {
             throw new \InvalidArgumentException('Category not found');
         }
@@ -349,10 +393,21 @@ class SyncService
             'is_higher_better' => $payload['is_higher_better'] ?? $indicator->is_higher_better,
             'description' => $payload['description'] ?? $indicator->description,
             'image_path' => $payload['image_path'] ?? $indicator->image_path,
+            'region_level' => $payload['region_level'] ?? $indicator->region_level,
+            'frequency' => $payload['frequency'] ?? $indicator->frequency,
+            'period_start' => $payload['period_start'] ?? $indicator->period_start,
+            'period_end' => $payload['period_end'] ?? $indicator->period_end,
+            'published_at' => $payload['published_at'] ?? $indicator->published_at,
+            'source_document' => $payload['source_document'] ?? $indicator->source_document,
+            'source_table' => $payload['source_table'] ?? $indicator->source_table,
+            'source_page' => $payload['source_page'] ?? $indicator->source_page,
+            'revision' => $payload['revision'] ?? $indicator->revision,
+            'quality_note' => $payload['quality_note'] ?? $indicator->quality_note,
+            'preferred_direction' => $payload['preferred_direction'] ?? $indicator->preferred_direction,
         ]);
     }
 
-    private function applyPhenomenonPayload(array $payload): void
+    private function applyPhenomenonPayload(array $payload, $phenomenonMap, $indicatorMap): void
     {
         $uuid = $payload['uuid'] ?? null;
         if (!is_string($uuid) || $uuid === '') {
@@ -362,14 +417,15 @@ class SyncService
         $updatedAt = $this->parseTimestamp($payload['updated_at'] ?? null);
         $deletedAt = $this->parseTimestamp($payload['deleted_at'] ?? null);
 
-        $phenomenon = Phenomenon::withTrashed()->where('uuid', $uuid)->first();
+        $phenomenon = $phenomenonMap->get($uuid);
         if (!$phenomenon) {
             $phenomenon = new Phenomenon(['uuid' => $uuid]);
+            $phenomenonMap->put($uuid, $phenomenon);
         }
 
         if ($deletedAt) {
             if (!$phenomenon->exists) {
-                $this->fillPhenomenonFields($phenomenon, $payload);
+                $this->fillPhenomenonFields($phenomenon, $payload, $indicatorMap);
                 $phenomenon->save();
             }
 
@@ -385,18 +441,18 @@ class SyncService
             $phenomenon->restore();
         }
 
-        $this->fillPhenomenonFields($phenomenon, $payload);
+        $this->fillPhenomenonFields($phenomenon, $payload, $indicatorMap);
         $this->forceTimestamps($phenomenon, $updatedAt, null);
     }
 
-    private function fillPhenomenonFields(Phenomenon $phenomenon, array $payload): void
+    private function fillPhenomenonFields(Phenomenon $phenomenon, array $payload, $indicatorMap): void
     {
         $indicatorUuid = $payload['indicator_uuid'] ?? null;
         if (!is_string($indicatorUuid) || $indicatorUuid === '') {
             throw new \InvalidArgumentException('Missing indicator_uuid');
         }
 
-        $indicator = Indicator::withTrashed()->where('uuid', $indicatorUuid)->first();
+        $indicator = $indicatorMap->get($indicatorUuid);
         if (!$indicator) {
             throw new \InvalidArgumentException('Indicator not found');
         }
@@ -408,6 +464,12 @@ class SyncService
             'impact' => $payload['impact'] ?? $phenomenon->impact,
             'source' => $payload['source'] ?? $phenomenon->source,
             'order' => $payload['order'] ?? $phenomenon->order,
+            'insight_type' => $payload['insight_type'] ?? $phenomenon->insight_type,
+            'source_document' => $payload['source_document'] ?? $phenomenon->source_document,
+            'source_page' => $payload['source_page'] ?? $phenomenon->source_page,
+            'published_at' => $payload['published_at'] ?? $phenomenon->published_at,
+            'author' => $payload['author'] ?? $phenomenon->author,
+            'quality_note' => $payload['quality_note'] ?? $phenomenon->quality_note,
         ]);
     }
 

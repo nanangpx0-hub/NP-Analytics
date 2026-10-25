@@ -3,12 +3,16 @@
 namespace App\Livewire;
 
 use App\Models\Indicator;
+use App\Services\GeminiInsightService;
+use Illuminate\Support\Collection;
 use Livewire\Component;
 
 class IndicatorDetail extends Component
 {
     public Indicator $indicator;
     public bool $showAllPhenomena = false;
+
+    public ?array $aiInsight = null;
 
     /**
      * Mount the component with the indicator ID.
@@ -28,6 +32,18 @@ class IndicatorDetail extends Component
         $this->showAllPhenomena = !$this->showAllPhenomena;
     }
 
+    public function generateAiInsight(GeminiInsightService $gemini): void
+    {
+        // Livewire menghidrasi ulang model dari database, jadi relasi perlu dimuat lagi.
+        $this->indicator->loadMissing(['category', 'phenomena']);
+
+        $this->aiInsight = $gemini->analyzeIndicator(
+            $this->indicator,
+            $this->historyFor($this->indicator),
+            true,
+        );
+    }
+
     /**
      * Render the component view.
      * 
@@ -35,7 +51,7 @@ class IndicatorDetail extends Component
      */
     public function render()
     {
-        // Group phenomena berdasarkan impact (positive/negative)
+        // Group phenomena berdasarkan impact (positive/negative/neutral)
         $phenomenaGrouped = $this->indicator->phenomena->groupBy('impact');
         
         // Hitung statistik phenomena
@@ -55,19 +71,37 @@ class IndicatorDetail extends Component
             'is_positive' => $this->isTrendPositive(),
         ];
 
+        // Riwayat seri waktu indikator yang sama lintas tahun
+        $history = $this->historyFor($this->indicator);
+        $gemini = app(GeminiInsightService::class);
+        // Livewire menggabungkan properti publik setelah data view, jadi hasil
+        // cache tidak boleh dikirim dengan nama kunci "aiInsight".
+        $resolvedAiInsight = $this->aiInsight ?? $gemini->cachedForIndicator($this->indicator, $history);
+
         return view('livewire.indicator-detail', [
             'indicator' => $this->indicator,
             'category' => $this->indicator->category,
             'phenomena' => $this->showAllPhenomena 
                 ? $this->indicator->phenomena 
-                : $this->indicator->phenomena->take(3),
+                : $this->indicator->phenomena->take(4),
             'phenomenaGrouped' => $phenomenaGrouped,
             'phenomenaStats' => $phenomenaStats,
             'trendData' => $trendData,
-            'hasMorePhenomena' => $this->indicator->phenomena->count() > 3,
+            'history' => $history,
+            'hasMorePhenomena' => $this->indicator->phenomena->count() > 4,
+            'resolvedAiInsight' => $resolvedAiInsight,
+            'geminiConfigured' => $gemini->isConfigured(),
         ])->layout('layouts.app', [
             'title' => $this->indicator->title,
         ]);
+    }
+
+    private function historyFor(Indicator $indicator): Collection
+    {
+        return Indicator::where('title', $indicator->title)
+            ->whereNull('deleted_at')
+            ->orderBy('year', 'asc')
+            ->get();
     }
 
     /**

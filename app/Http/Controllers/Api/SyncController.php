@@ -9,6 +9,7 @@ use App\Models\Phenomenon;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 
 class SyncController extends Controller
@@ -81,16 +82,29 @@ class SyncController extends Controller
             'errors' => [],
         ];
 
-        foreach ($request->input('categories', []) as $payload) {
-            $this->applyCategory($payload, $result);
-        }
+        try {
+            DB::beginTransaction();
 
-        foreach ($request->input('indicators', []) as $payload) {
-            $this->applyIndicator($payload, $result);
-        }
+            foreach ($request->input('categories', []) as $payload) {
+                $this->applyCategory($payload, $result);
+            }
 
-        foreach ($request->input('phenomena', []) as $payload) {
-            $this->applyPhenomenon($payload, $result);
+            foreach ($request->input('indicators', []) as $payload) {
+                $this->applyIndicator($payload, $result);
+            }
+
+            foreach ($request->input('phenomena', []) as $payload) {
+                $this->applyPhenomenon($payload, $result);
+            }
+
+            DB::commit();
+        } catch (\Throwable $exception) {
+            DB::rollBack();
+
+            return response()->json([
+                'message' => 'Sync push failed',
+                'error' => $exception->getMessage(),
+            ], 500);
         }
 
         return response()->json($result);
@@ -211,6 +225,17 @@ class SyncController extends Controller
             'is_higher_better',
             'description',
             'image_path',
+            'region_level',
+            'frequency',
+            'period_start',
+            'period_end',
+            'published_at',
+            'source_document',
+            'source_table',
+            'source_page',
+            'revision',
+            'quality_note',
+            'preferred_direction',
         ]));
 
         $indicator->category_id = $category->id;
@@ -286,6 +311,12 @@ class SyncController extends Controller
             'impact',
             'source',
             'order',
+            'insight_type',
+            'source_document',
+            'source_page',
+            'published_at',
+            'author',
+            'quality_note',
         ]));
 
         $phenomenon->indicator_id = $indicator->id;
@@ -414,6 +445,17 @@ class SyncController extends Controller
             'is_higher_better' => $indicator->is_higher_better,
             'description' => $indicator->description,
             'image_path' => $indicator->image_path,
+            'region_level' => $indicator->region_level,
+            'frequency' => $indicator->frequency,
+            'period_start' => $indicator->period_start?->toDateString(),
+            'period_end' => $indicator->period_end?->toDateString(),
+            'published_at' => $indicator->published_at?->toDateString(),
+            'source_document' => $indicator->source_document,
+            'source_table' => $indicator->source_table,
+            'source_page' => $indicator->source_page,
+            'revision' => $indicator->revision,
+            'quality_note' => $indicator->quality_note,
+            'preferred_direction' => $indicator->preferred_direction,
             'updated_at' => $indicator->updated_at?->toIso8601String(),
             'deleted_at' => $indicator->deleted_at?->toIso8601String(),
         ];
@@ -429,6 +471,12 @@ class SyncController extends Controller
             'impact' => $phenomenon->impact,
             'source' => $phenomenon->source,
             'order' => $phenomenon->order,
+            'insight_type' => $phenomenon->insight_type,
+            'source_document' => $phenomenon->source_document,
+            'source_page' => $phenomenon->source_page,
+            'published_at' => $phenomenon->published_at?->toDateString(),
+            'author' => $phenomenon->author,
+            'quality_note' => $phenomenon->quality_note,
             'updated_at' => $phenomenon->updated_at?->toIso8601String(),
             'deleted_at' => $phenomenon->deleted_at?->toIso8601String(),
         ];

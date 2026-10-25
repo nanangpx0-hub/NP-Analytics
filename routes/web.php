@@ -26,12 +26,9 @@ Route::get('/dashboard', Dashboard::class)->name('dashboard');
 Route::get('/indicators', IndicatorList::class)->name('indicators.index');
 Route::get('/indicators/{id}', IndicatorDetail::class)->name('indicators.show');
 
-// Optional: Category-specific indicators
-Route::get('/indicators/category/{categoryId}', function ($categoryId) {
-    return view('livewire.indicator-list', [
-        'categoryId' => $categoryId,
-    ]);
-})->name('indicators.category');
+// Category-specific indicators
+Route::get('/indicators/category/{categoryId}', IndicatorList::class)
+    ->name('indicators.category');
 
 // Optional: API Routes for Mobile (if needed later)
 // Route::prefix('api')->group(function () {

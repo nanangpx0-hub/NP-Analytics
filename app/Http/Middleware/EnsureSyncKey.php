@@ -16,7 +16,13 @@ class EnsureSyncKey
         $expected = config('sync.api_key');
 
         if (empty($expected)) {
-            return $next($request);
+            if (app()->environment('local')) {
+                return $next($request);
+            }
+
+            return response()->json([
+                'message' => 'Sync API key is not configured.',
+            ], 503);
         }
 
         $provided = $request->header('X-SYNC-KEY')

@@ -245,12 +245,12 @@ Fitur:
    - `impact` (enum: positive/negative)
    - `timestamps`
 
-### Sample Data
+### Strategic Data (BPS Kabupaten Jember)
 
-Seeder menyediakan:
-- **6 Kategori**: Ekonomi, Sosial, Pertanian, Kependudukan, Industri, Infrastruktur
-- **14 Indikator**: PDRB, IPM, Kemiskinan, Produksi Padi, dll.
-- **10 Phenomena**: Dampak positif/negatif terhadap indikator
+Seeder master menyediakan data empiris resmi BPS Jember (2021–2026):
+- **8 Kategori**: Ekonomi & PDRB, Sosial & Kemiskinan, Ketenagakerjaan & SDM, Indeks Pembangunan Manusia, Pertanian & Ketahanan Pangan, Pariwisata & Jasa, Kependudukan, Potensi Wilayah & Desa (PODES)
+- **66 Indikator**: PDRB ADHB/ADHK, Inflasi IHK, Kemiskinan (P0, P1, P2, GK), Ketenagakerjaan (TPT, TPAK, Vokasi), IPM (UHH, HLS, RLS), Padi & Beras, TPK Perhotelan, PODES 2025.
+- **16 Fenomena**: Telaah 5 Jebakan Struktural daerah & roadmap transformasi sosio-ekonomi 2026–2030
 
 📖 [Lihat SEEDER_GUIDE.md](docs/SEEDER_GUIDE.md) untuk detail lengkap
 
@@ -266,20 +266,37 @@ php artisan tinker
 
 ```php
 // Cek jumlah data
-App\Models\Category::count();      // Should be 6
-App\Models\Indicator::count();     // Should be 14
-App\Models\Phenomenon::count();    // Should be 10
+App\Models\Category::count();      // 8 Kategori
+App\Models\Indicator::count();     // 66 Indikator
+App\Models\Phenomenon::count();    // 16 Fenomena
 
 // Lihat data
 App\Models\Category::all()->pluck('name');
-App\Models\Indicator::where('is_higher_better', false)->get();
+App\Models\Indicator::where('year', 2025)->get();
 ```
 
 ---
 
 ## 📱 Build for Android (NativePHP)
 
-Coming soon...
+APK release ditandatangani dan terverifikasi untuk perangkat `arm64-v8a` (POCO X7). Panduan lengkap—kompatibilitas Android 14–17, safe area HyperOS, optimasi performa, Gemini AI, signing, verifikasi, dan troubleshooting—tersedia di:
+
+📖 **[Dokumentasi Optimasi Android & Gemini AI](docs/OPTIMASI_ANDROID_DAN_GEMINI.md)**
+
+Build cepat:
+
+```bash
+npm run build
+php artisan test
+php artisan native:package android --build-type=release --no-tty \
+  --keystore="android-keystore/np-analytics.keystore" \
+  --keystore-password="<STORE_PASSWORD>" \
+  --key-alias="npanalytics" \
+  --key-password="<KEY_PASSWORD>" \
+  --output=dist
+```
+
+Hasil: `dist/app-release.apk`. Selalu verifikasi dengan `apksigner` karena exit code `0` dari NativePHP tidak menjamin Gradle berhasil dan APK terbentuk.
 
 ---
 

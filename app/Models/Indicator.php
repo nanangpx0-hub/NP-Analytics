@@ -30,6 +30,17 @@ class Indicator extends Model
         'is_higher_better',
         'description',
         'image_path',
+        'region_level',
+        'frequency',
+        'period_start',
+        'period_end',
+        'published_at',
+        'source_document',
+        'source_table',
+        'source_page',
+        'revision',
+        'quality_note',
+        'preferred_direction',
     ];
 
     /**
@@ -42,6 +53,9 @@ class Indicator extends Model
         'trend' => 'decimal:4',
         'is_higher_better' => 'boolean',
         'year' => 'integer',
+        'period_start' => 'date',
+        'period_end' => 'date',
+        'published_at' => 'date',
     ];
 
     protected static function booted(): void
@@ -141,6 +155,17 @@ class Indicator extends Model
     public function getFormattedValueAttribute(): string
     {
         return number_format($this->value, 2) . ' ' . $this->unit;
+    }
+
+    /**
+     * Get historical records of this same indicator across years.
+     */
+    public function getHistoryAttribute()
+    {
+        return static::where('title', $this->title)
+            ->whereNull('deleted_at')
+            ->orderBy('year', 'asc')
+            ->get();
     }
 
     /**

@@ -1,36 +1,23 @@
-<div class="bg-white border border-slate-200 rounded-xl shadow-sm p-4">
-    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-            <div class="text-sm font-semibold text-slate-800">Sinkronisasi Data</div>
-            <div class="text-xs text-slate-500">Terakhir sync: {{ $this->lastSyncLabel }}</div>
-            @if($message)
-                <div class="mt-1 text-xs {{ $status === 'error' ? 'text-red-600' : 'text-emerald-600' }}">
-                    {{ $message }}
-                </div>
-            @endif
+{{-- Tombol sinkronisasi kompak untuk navbar --}}
+<div class="relative flex items-center">
+    <button type="button" wire:click="syncNow" wire:target="syncNow"
+        title="Sinkron dengan server (terakhir: {{ $this->lastSyncLabel }})"
+        class="relative grid h-10 w-10 place-items-center rounded-full text-white bg-white/10 active:bg-white/25 hover:bg-white/20 transition disabled:opacity-60"
+        wire:loading.attr="disabled" wire:target="syncNow">
+        {{-- Icon idle --}}
+        <svg class="h-5 w-5" wire:loading.remove wire:target="syncNow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+        </svg>
+        {{-- Spinner saat sync --}}
+        <svg class="h-5 w-5 animate-spin" wire:loading wire:target="syncNow" viewBox="0 0 24 24" fill="none">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a12 12 0 00-12 12h4z"></path>
+        </svg>
+    </button>
+
+    @if($message)
+        <div class="absolute top-12 right-0 z-[70] max-w-56 rounded-lg border px-3 py-2 text-xs shadow-xl {{ $status === 'error' ? 'border-red-200 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700' }}">
+            {{ $message }}
         </div>
-        <div class="flex items-center gap-2">
-            <button
-                type="button"
-                wire:click="syncNow"
-                wire:loading.attr="disabled"
-                wire:target="syncNow"
-                class="inline-flex items-center gap-2 rounded-lg bg-brand-navy px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-navy/90 disabled:cursor-not-allowed disabled:opacity-70"
-            >
-                <svg class="h-4 w-4 animate-spin" wire:loading wire:target="syncNow" viewBox="0 0 24 24" fill="none">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a12 12 0 00-12 12h4z"></path>
-                </svg>
-                <span wire:loading.remove wire:target="syncNow">Sync</span>
-                <span wire:loading wire:target="syncNow">Menyinkronkan...</span>
-            </button>
-            @if($status === 'success')
-                <span class="text-xs font-medium text-emerald-600">Berhasil</span>
-            @elseif($status === 'error')
-                <span class="text-xs font-medium text-red-600">Gagal</span>
-            @elseif($status === 'syncing')
-                <span class="text-xs font-medium text-slate-500">Proses</span>
-            @endif
-        </div>
-    </div>
+    @endif
 </div>
