@@ -1,342 +1,230 @@
-# 📊 NP Analytics
+# NP Analytics
 
-> **Aplikasi Statistik Daerah Offline-First untuk Android**
-> 
-> Built with Laravel 11 + Livewire 3 + NativePHP
+Aplikasi statistik daerah **offline-first** untuk Android. Data BPS Kabupaten
+Jember disimpan di SQLite perangkat, disinkronkan dua arah dengan backend admin
+melalui token perangkat, dan analisis AI diproksikan server — tidak ada API key
+Gemini di dalam APK.
 
----
-
-## 🎯 About
-
-**NP Analytics** adalah aplikasi mobile Android untuk menampilkan dan menganalisis indikator statistik daerah secara offline. Aplikasi ini menggunakan **Smart Trend Logic** untuk menampilkan warna trend (hijau/merah) secara otomatis berdasarkan jenis indikator.
-
-### Key Features
-
-✨ **Offline-First** - Semua data tersimpan di SQLite lokal  
-🎨 **Smart Trend Logic** - Warna otomatis (hijau = bagus, merah = buruk)  
-📱 **Mobile-Ready** - Optimized untuk NativePHP Android wrapper  
-🚀 **Fast & Responsive** - Livewire 3 + Blade components  
-🔍 **Advanced Filtering** - Cari berdasarkan kategori, tahun, keyword  
+Dibangun dengan Laravel 11, Livewire 3, NativePHP Mobile 3, dan Tailwind CSS.
 
 ---
 
-## 🛠️ Tech Stack
+## Fitur utama
 
-| Layer | Technology |
+- **Offline-first** — dashboard, daftar indikator, detail, dan grafik tetap
+  berjalan tanpa jaringan.
+- **Smart Trend Logic** — satu sumber kebenaran `is_higher_better`; arah
+  perbaikan diturunkan otomatis.
+- **Sinkronisasi aman** — aktivasi perangkat sekali pakai, token Sanctum per
+  perangkat, protokol versi global, deteksi konflik, dan tombstone.
+- **Analisis AI** — proxy Gemini di backend dengan cache hash konteks; fallback
+  analisis lokal saat offline.
+- **Grafik time-series** — komponen SVG lokal tanpa CDN.
+- **Multi-tahun** — seri indikator ditautkan lewat `series_key`, bukan judul.
+- **HyperOS/Android 14–17** — safe area, edge-to-edge, predictive back, dan
+  penyesuaian performa SQLite.
+
+---
+
+## Tech stack
+
+| Layer | Teknologi |
 |-------|-----------|
-| **Backend** | Laravel 11 |
-| **Frontend** | Livewire 3 + Blade |
-| **CSS** | Tailwind CSS 3 |
-| **Database** | SQLite (offline) |
-| **Mobile Wrapper** | NativePHP (Alpha/Beta) |
+| Aplikasi | Laravel 11, Livewire 3, Blade |
+| Mobile wrapper | NativePHP Mobile 3 |
+| Database | SQLite (WAL) |
+| CSS/JS | Tailwind CSS 3 + Vite |
+| Paket bersama | `packages/np-analytics-core` (Composer path repository) |
+| Server | `np-analytics-backend` (Laravel 11 + MySQL/SQLite) |
 
 ---
 
-## 🚀 Installation
+## Prasyarat
 
-### Prerequisites
+- PHP 8.3+ dengan ekstensi `pdo_sqlite`, `sqlite3`, `mbstring`, `intl`, `zip`.
+  Pastikan `php` tersedia di `PATH`.
+- Composer 2.
+- Node.js 18+ dan npm.
+- Android SDK + JDK 17 (hanya untuk build APK).
 
-- PHP 8.3 or higher
-- PHP binary (Laragon): `E:\laragon\bin\php\php-8.5.1-nts-Win32-vs17-x64\php.exe`
-- Composer
-- Node.js 18+ (untuk build Tailwind lokal)
-- SQLite extension enabled
-
-Catatan: Path PHP lokal juga disimpan di `.env` sebagai `PHP_BINARY` agar konsisten dengan tooling lokal.
-
-### Setup Steps
-
-1. **Clone/Extract ke direktori project**
-   ```bash
-   cd "e:\laragon\www\NP Analytics"
-   ```
-
-   Jika `php` belum ada di PATH, gunakan path di atas saat menjalankan perintah. Contoh: `E:\laragon\bin\php\php-8.5.1-nts-Win32-vs17-x64\php.exe artisan serve`.
-
-2. **Install Dependencies (PHP)**
-   ```bash
-   composer install
-   ```
-
-3. **Install Dependencies (Frontend)**
-   ```bash
-   npm install
-   ```
-
-4. **Build Assets (Tailwind)**
-   ```bash
-   npm run dev
-   ```
-   Untuk production/offline bundle:
-   ```bash
-   npm run build
-   ```
-
-5. **Configure Environment**
-   ```bash
-   cp .env.example .env
-   php artisan key:generate
-   ```
-
-6. **Setup Database (SQLite)**
-   
-   Edit `.env`:
-   ```env
-   DB_CONNECTION=sqlite
-   DB_DATABASE=/absolute/path/to/database/database.sqlite
-   ```
-
-   Create SQLite file:
-   ```bash
-   touch database/database.sqlite
-   ```
-
-7. **Run Migrations**
-   ```bash
-   php artisan migrate
-   ```
-
-8. **Seed Database dengan Data Sample**
-   ```bash
-   php artisan db:seed
-   ```
-
-9. **Run Development Server**
-   ```bash
-   php artisan serve
-   ```
-
-10. **Akses Aplikasi**
-   
-   Buka browser: `http://localhost:8000`
+Tidak ada path absolut mesin tertentu yang disimpan di repository. Jika `php`
+belum ada di `PATH`, panggil binary PHP Anda secara eksplisit saat menjalankan
+perintah.
 
 ---
 
-## 🖥️ Backend Server (PHP 8.2)
-
-Untuk kebutuhan update data di server dan sinkronisasi dengan aplikasi mobile, backend **dipisah sebagai repo terpisah**.
-Lokasi lokal saat ini: `E:\laragon\www\np-analytics-backend`
-
-**Setup singkat (di repo backend):**
-1. `cd E:\laragon\www\np-analytics-backend`
-2. `composer install`
-3. `cp .env.example .env`
-4. Atur `DB_*`, `SYNC_API_KEY`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`
-5. `php artisan key:generate`
-6. `php artisan migrate --seed`
-7. `php artisan serve`
-
-Admin panel: `http://localhost:8000/login`  
-Sync API: `GET /api/sync/pull` dan `POST /api/sync/push`
-
----
-
-## 📁 Project Structure
-
-```
-NP Analytics/
-├── app/
-│   ├── Livewire/
-│   │   ├── Dashboard.php          # Dashboard component
-│   │   └── IndicatorList.php      # Indicator list component
-│   └── Models/
-│       ├── Category.php            # Category model
-│       ├── Indicator.php           # Indicator model (Smart Trend Logic)
-│       └── Phenomenon.php          # Phenomenon model
-├── database/
-│   ├── migrations/                 # Database migrations
-│   ├── seeders/                    # Database seeders (14 indikator)
-│   └── factories/                  # Model factories
-├── resources/
-│   └── views/
-│       ├── layouts/
-│       │   └── app.blade.php       # Main layout
-│       ├── components/
-│       │   └── indicator-card.blade.php  # Reusable card component
-│       └── livewire/
-│           ├── dashboard.blade.php
-│           └── indicator-list.blade.php
-├── routes/
-│   └── web.php                     # Web routes
-└── docs/
-    ├── SEEDER_GUIDE.md             # Database seeding guide
-    └── Blueprint NP Analytics.md    # Project blueprint
-```
-
----
-
-## 🎨 Branding & Design
-
-### Color Palette
-
-| Color | Hex Code | Usage |
-|-------|----------|-------|
-| **Navy Blue** | `#0f172a` | Primary, headers, navigation |
-| **Amber Gold** | `#f59e0b` | Accent, badges, highlights |
-| **Green** | `#10b981` | Positive trends |
-| **Red** | `#ef4444` | Negative trends |
-
-### Design Principles
-
-- ✅ Professional & Minimalist
-- ✅ Mobile-first responsive design
-- ✅ Touch-friendly (48×48dp tap targets)
-- ✅ High contrast for readability
-
----
-
-## 📊 Smart Trend Logic
-
-Aplikasi ini menggunakan logika cerdas untuk menampilkan warna trend:
-
-### Indikator Positif (`is_higher_better: true`)
-```
-Contoh: PDRB, Produksi Padi, IPM
-• Trend NAIK (+)   → 🟢 HIJAU (bagus)
-• Trend TURUN (-)  → 🔴 MERAH (buruk)
-```
-
-### Indikator Negatif (`is_higher_better: false`)
-```
-Contoh: Kemiskinan, Inflasi, Pengangguran
-• Trend NAIK (+)   → 🔴 MERAH (buruk)
-• Trend TURUN (-)  → 🟢 HIJAU (bagus)
-```
-
----
-
-## 📚 Usage
-
-### Dashboard
-
-URL: `/dashboard`
-
-Menampilkan:
-- 4 statistik cards (Kategori, Indikator, Trend Positif/Negatif)
-- Indikator per kategori dalam grid
-- Filter berdasarkan tahun
-
-### Daftar Indikator
-
-URL: `/indicators`
-
-Fitur:
-- 🔍 Search indikator by title
-- 🗂️ Filter by category
-- 📅 Filter by year
-- 📱 Responsive grid layout
-
----
-
-## 🗄️ Database Schema
-
-### Tables
-
-1. **categories**
-   - `id`, `name`, `icon`, `timestamps`
-
-2. **indicators**
-   - `id`, `category_id` (FK), `title`, `value`, `unit`, `year`
-   - `trend`, `is_higher_better`, `description`, `image_path`
-   - `timestamps`
-
-3. **phenomena**
-   - `id`, `indicator_id` (FK), `title`, `description`
-   - `impact` (enum: positive/negative)
-   - `timestamps`
-
-### Strategic Data (BPS Kabupaten Jember)
-
-Seeder master menyediakan data empiris resmi BPS Jember (2021–2026):
-- **8 Kategori**: Ekonomi & PDRB, Sosial & Kemiskinan, Ketenagakerjaan & SDM, Indeks Pembangunan Manusia, Pertanian & Ketahanan Pangan, Pariwisata & Jasa, Kependudukan, Potensi Wilayah & Desa (PODES)
-- **66 Indikator**: PDRB ADHB/ADHK, Inflasi IHK, Kemiskinan (P0, P1, P2, GK), Ketenagakerjaan (TPT, TPAK, Vokasi), IPM (UHH, HLS, RLS), Padi & Beras, TPK Perhotelan, PODES 2025.
-- **16 Fenomena**: Telaah 5 Jebakan Struktural daerah & roadmap transformasi sosio-ekonomi 2026–2030
-
-📖 [Lihat SEEDER_GUIDE.md](docs/SEEDER_GUIDE.md) untuk detail lengkap
-
----
-
-## 🧪 Testing
-
-### Run Tinker untuk Cek Data
+## Setup lokal
 
 ```bash
-php artisan tinker
+composer install
+npm install
+cp .env.example .env
+php artisan key:generate
+php artisan migrate --seed
+npm run build
+php artisan serve
 ```
 
-```php
-// Cek jumlah data
-App\Models\Category::count();      // 8 Kategori
-App\Models\Indicator::count();     // 66 Indikator
-App\Models\Phenomenon::count();    // 16 Fenomena
+Database SQLite lokal berada di `database/private/database.sqlite` dan dibuat
+otomatis saat aplikasi/command pertama kali dijalankan. Folder tersebut
+dikecualikan dari Git dan dari bundel APK.
 
-// Lihat data
-App\Models\Category::all()->pluck('name');
-App\Models\Indicator::where('year', 2025)->get();
+Buka `http://localhost:8000`. Untuk pengembangan aset:
+
+```bash
+npm run dev
 ```
 
 ---
 
-## 📱 Build for Android (NativePHP)
+## Struktur project
 
-APK release ditandatangani dan terverifikasi untuk perangkat `arm64-v8a` (POCO X7). Panduan lengkap—kompatibilitas Android 14–17, safe area HyperOS, optimasi performa, Gemini AI, signing, verifikasi, dan troubleshooting—tersedia di:
+```
+NP-Analytics/
+├── app/
+│   ├── Livewire/                  # Dashboard, daftar/detail indikator, pengaturan sync
+│   ├── Models/                    # Model aplikasi + status sync lokal
+│   ├── Services/                  # SyncService, GeminiInsightService, AI client
+│   └── Providers/
+├── database/
+│   ├── migrations/                # Termasuk migrasi protokol sync
+│   └── seeders/                   # Master data (upsert idempoten)
+├── packages/np-analytics-core/    # Model/enum/mapper/seeder bersama (vendored)
+├── resources/
+│   ├── views/                     # Layout, komponen, Livewire views, grafik SVG
+│   └── css/js/
+├── routes/web.php
+├── tests/                         # Feature & unit test mobile
+├── docs/
+│   ├── SYNC_GUIDE.md              # Protokol sync lengkap
+│   ├── OPTIMASI_ANDROID_DAN_GEMINI.md
+│   ├── PANDUAN_GIT.md
+│   └── SEEDER_GUIDE.md
+└── pint.json
+```
 
-📖 **[Dokumentasi Optimasi Android & Gemini AI](docs/OPTIMASI_ANDROID_DAN_GEMINI.md)**
+Paket bersama dipakai lewat `repositories` bertipe `path` dengan
+`"symlink": false`. Dengan begitu kode ikut tersalin ke APK dan tidak bergantung
+pada symlink Windows.
 
-Build cepat:
+---
+
+## Database dan data master
+
+Seeder master menyediakan data BPS Kabupaten Jember:
+
+- 8 kategori
+- 66 indikator (PDRB, inflasi, kemiskinan, ketenagakerjaan, IPM, pertanian,
+  pariwisata, kependudukan/PODES)
+- 16 fenomena
+
+Seeder memakai **upsert berdasarkan natural key** (`name`, `series_key`+`year`,
+`indicator`+`order`) dan UUID v5 deterministik, sehingga menjalankan ulang
+seeder tidak membuat duplikat. Data lama yang sudah terlanjur ganda dapat
+dirapikan dengan:
+
+```bash
+php artisan sync:dedupe
+```
+
+Tabel tambahan pada perangkat: `sync_states`, `sync_conflicts`,
+`device_credentials`, `ai_insights`. Database lokal berada di
+`database/private/` dan tidak boleh masuk Git.
+
+---
+
+## Sinkronisasi
+
+1. Admin backend membuat kode aktivasi sekali pakai.
+2. Di aplikasi, buka **Pengaturan Sync** dan isi URL server, kode aktivasi,
+   serta nama perangkat.
+3. Sync pertama melakukan **pull penuh**, lalu mengirim record lokal yang
+   `dirty`, lalu pull inkremental. Perangkat yang sudah ter-seed tidak
+   menghasilkan duplikat.
+
+Token perangkat disimpan terenkripsi di SQLite, bukan di `.env`. Detail
+protokol, bentuk payload, konflik, dan troubleshooting ada di
+[docs/SYNC_GUIDE.md](docs/SYNC_GUIDE.md).
+
+---
+
+## Analisis AI
+
+Mobile tidak menyimpan API key. `GeminiInsightService` memanggil
+`POST /api/ai/insight` di backend dengan token perangkat (ability
+`ai:insight`). Server memakai `GEMINI_API_KEY` miliknya sendiri, cache hash
+konteks, dan rate limit per perangkat. Saat offline atau server tidak
+dikonfigurasi, aplikasi menampilkan analisis lokal yang disusun dari data
+perangkat.
+
+---
+
+## Pengujian dan kualitas kode
+
+```bash
+php artisan test                  # Feature + unit test (SQLite in-memory)
+vendor/bin/pint --test            # Gaya kode Laravel
+vendor/bin/phpstan analyse        # Larastan level 5
+```
+
+CI GitHub Actions (`.github/workflows/ci.yml`) menjalankan ketiganya pada PHP
+8.3 untuk setiap push dan pull request.
+
+---
+
+## Build APK Android
+
+Naikkan `NATIVEPHP_APP_VERSION_CODE` di `.env` setiap kali skema database
+berubah; aplikasi akan menjalankan `php artisan migrate --force` sekali saat
+versi kode berubah.
 
 ```bash
 npm run build
-php artisan test
+
+# Password dibaca dari environment shell, jangan ditulis di repository.
 php artisan native:package android --build-type=release --no-tty \
   --keystore="android-keystore/np-analytics.keystore" \
-  --keystore-password="<STORE_PASSWORD>" \
+  --keystore-password="$KEYSTORE_PASSWORD" \
   --key-alias="npanalytics" \
-  --key-password="<KEY_PASSWORD>" \
+  --key-password="$KEY_PASSWORD" \
   --output=dist
 ```
 
-Hasil: `dist/app-release.apk`. Selalu verifikasi dengan `apksigner` karena exit code `0` dari NativePHP tidak menjamin Gradle berhasil dan APK terbentuk.
+Exit code `0` dari NativePHP **tidak menjamin** Gradle menghasilkan APK.
+Selalu verifikasi:
+
+```bash
+ls -lh dist/*.apk
+apksigner verify --print-certs dist/app-release.apk
+
+# Bundel Laravel tidak boleh membawa keystore, database lokal, log, atau APK lama.
+unzip -l dist/app-release.apk | grep -Ei 'keystore|\.jks|\.sqlite|laravel\.log|dist/app-release'
+```
+
+Perintah terakhir harus tidak menghasilkan output. APK baru membuat
+`database/private/database.sqlite` saat pertama kali dijalankan, lalu
+menjalankan migrasi dan seeder.
+
+Panduan lengkap optimasi Android, signing, dan troubleshooting:
+[docs/OPTIMASI_ANDROID_DAN_GEMINI.md](docs/OPTIMASI_ANDROID_DAN_GEMINI.md).
+
+### Keamanan signing
+
+- Password keystore tidak disimpan di repository. `gen_keystore.bat` membaca
+  `KEYSTORE_PASSWORD` atau meminta input interaktif.
+- `android-keystore/`, `keys/`, `*.jks`, `*.keystore`, `dist/`, `build-output/`,
+  `*.apk`, `database/private/`, dan `.env` dikecualikan dari Git.
+- Bundel APK juga mengecualikan keystore, database lokal, log, dan artefak
+  `dist/` melalui `config/nativephp.php`.
+- **Keystore lama harus dirotasi** karena password-nya pernah tersimpan sebagai
+  plaintext. Buat keystore baru, simpan salinan aman di luar repository, lalu
+  distribusikan APK yang ditandatangani ulang.
+- Jika kredensial telanjur masuk riwayat Git, hapus dari riwayat dan rotasi
+  kredensial tersebut.
+- Alur commit/push manual ada di [docs/PANDUAN_GIT.md](docs/PANDUAN_GIT.md).
 
 ---
 
-## 🔄 Sync (Android <-> Server)
+## Lisensi
 
-Aplikasi mendukung sinkronisasi dua arah:
-- Edit data di HP (offline) lalu sync ke server saat online
-- Update data di server lalu tarik ke HP saat sync
-
-Set `SYNC_BASE_URL` di `.env` aplikasi mobile agar mengarah ke backend server.
-
-Panduan lengkap ada di: `docs/SYNC_GUIDE.md`
-
----
-
-## 🤝 Contributing
-
-This is a private project by **Nanang Pamungkas**. If you have suggestions, feel free to contact the author.
-
----
-
-## 📄 License
-
-Copyright © 2026 **Nanang Pamungkas**. All rights reserved.
-
----
-
-## 👨‍💻 Author
-
-**Nanang Pamungkas**
-- Role: Developer & Analyst
-- Project: NP Analytics - Offline Statistical Analysis App
-- Stack: Laravel + Livewire + NativePHP
-
----
-
-## 📞 Support
-
-Untuk pertanyaan atau issue, silakan buat issue di repository atau hubungi author.
-
----
-
-**Built with ❤️ using Laravel & NativePHP**
+Copyright © 2026 Nanang Pamungkas. All rights reserved.

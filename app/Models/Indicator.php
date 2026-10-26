@@ -2,92 +2,37 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasSyncState;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Support\Str;
+use NpAnalytics\Core\Models\Indicator as CoreIndicator;
 
-class Indicator extends Model
+/**
+ * @property bool $dirty
+ * @property int $base_version
+ * @property int $server_version
+ * @property-read Category|null $category
+ * @property-read \Illuminate\Database\Eloquent\Collection<int, Phenomenon> $phenomena
+ */
+class Indicator extends CoreIndicator
 {
     use HasFactory;
-    use SoftDeletes;
+    use HasSyncState;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var array<int, string>
-     */
-    protected $fillable = [
-        'uuid',
-        'category_id',
-        'title',
-        'value',
-        'unit',
-        'year',
-        'trend',
-        'is_higher_better',
-        'description',
-        'image_path',
-        'region_level',
-        'frequency',
-        'period_start',
-        'period_end',
-        'published_at',
-        'source_document',
-        'source_table',
-        'source_page',
-        'revision',
-        'quality_note',
-        'preferred_direction',
-    ];
-
-    /**
-     * The attributes that should be cast.
-     *
-     * @var array<string, string>
-     */
-    protected $casts = [
-        'value' => 'decimal:4',
-        'trend' => 'decimal:4',
-        'is_higher_better' => 'boolean',
-        'year' => 'integer',
-        'period_start' => 'date',
-        'period_end' => 'date',
-        'published_at' => 'date',
-    ];
-
-    protected static function booted(): void
+    protected function casts(): array
     {
-        static::creating(function (Indicator $indicator): void {
-            if (empty($indicator->uuid)) {
-                $indicator->uuid = (string) Str::uuid();
-            }
-        });
-
-        static::deleting(function (Indicator $indicator): void {
-            if ($indicator->isForceDeleting()) {
-                return;
-            }
-
-            $indicator->phenomena()->each(function (Phenomenon $phenomenon): void {
-                $phenomenon->delete();
-            });
-        });
-
-        static::restoring(function (Indicator $indicator): void {
-            $indicator->phenomena()
-                ->withTrashed()
-                ->get()
-                ->each(function (Phenomenon $phenomenon): void {
-                    $phenomenon->restore();
-                });
-        });
+        return array_merge(parent::casts(), [
+            'server_version' => 'integer',
+            'base_version' => 'integer',
+            'dirty' => 'boolean',
+        ]);
     }
 
     /**
      * Get the category that owns the indicator.
+     *
+     * @return BelongsTo<Category, $this>
      */
     public function category(): BelongsTo
     {
@@ -96,91 +41,11 @@ class Indicator extends Model
 
     /**
      * Get all phenomena for this indicator.
+     *
+     * @return HasMany<Phenomenon, $this>
      */
     public function phenomena(): HasMany
     {
         return $this->hasMany(Phenomenon::class);
-    }
-
-    /**
-     * Get the trend color based on Smart Trend Logic.
-     * 
-     * Logika:
-     * - is_higher_better = true (Padi, PDRB): Naik = Hijau, Turun = Merah
-     * - is_higher_better = false (Kemiskinan, Inflasi): Naik = Merah, Turun = Hijau
-     */
-    public function getTrendColorAttribute(): string
-    {
-        if ($this->trend === null || $this->trend == 0) {
-            return 'gray'; // Netral
-        }
-
-        $isPositiveTrend = $this->trend > 0;
-
-        if ($this->is_higher_better) {
-            return $isPositiveTrend ? 'green' : 'red';
-        } else {
-            return $isPositiveTrend ? 'red' : 'green';
-        }
-    }
-
-    /**
-     * Get the trend icon (arrow up/down).
-     */
-    public function getTrendIconAttribute(): string
-    {
-        if ($this->trend === null || $this->trend == 0) {
-            return 'minus'; // Netral
-        }
-
-        return $this->trend > 0 ? 'arrow-up' : 'arrow-down';
-    }
-
-    /**
-     * Get formatted trend percentage.
-     */
-    public function getFormattedTrendAttribute(): string
-    {
-        if ($this->trend === null) {
-            return '-';
-        }
-
-        $sign = $this->trend > 0 ? '+' : '';
-        return $sign . number_format($this->trend, 2) . '%';
-    }
-
-    /**
-     * Get formatted value with unit.
-     */
-    public function getFormattedValueAttribute(): string
-    {
-        return number_format($this->value, 2) . ' ' . $this->unit;
-    }
-
-    /**
-     * Get historical records of this same indicator across years.
-     */
-    public function getHistoryAttribute()
-    {
-        return static::where('title', $this->title)
-            ->whereNull('deleted_at')
-            ->orderBy('year', 'asc')
-            ->get();
-    }
-
-    /**
-     * Scope: Filter by year.
-     */
-    public function scopeOfYear($query, int $year)
-    {
-        return $query->where('year', $year);
-    }
-
-    /**
-     * Scope: Filter by category.
-     */
-    public function scopeOfCategory($query, int $categoryId)
-    {
-        return $query->where('category_id', $categoryId);
     }
 }

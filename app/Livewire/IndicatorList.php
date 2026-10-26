@@ -47,7 +47,7 @@ class IndicatorList extends Component
     {
         $query = Indicator::with(['category']);
 
-        if (!empty($this->selectedYear) && $this->selectedYear !== 'all') {
+        if (! empty($this->selectedYear) && $this->selectedYear !== 'all') {
             $query->where('year', $this->selectedYear);
         }
 
@@ -56,7 +56,7 @@ class IndicatorList extends Component
         }
 
         if ($this->search) {
-            $query->where('title', 'like', '%' . $this->search . '%');
+            $query->where('title', 'like', '%'.$this->search.'%');
         }
 
         $indicators = $query->orderByDesc('year')->orderBy('title')->paginate(12);

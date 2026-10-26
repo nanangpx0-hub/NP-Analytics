@@ -105,12 +105,40 @@ return [
     */
 
     'cleanup_env_keys' => [
+        // PENTING: implementasi NativePHP saat ini hanya mencocokkan satu
+        // kunci secara exact, sehingga daftar ini bukan jaminan. Jangan
+        // menaruh API key/password di .env mobile. APK hanya membawa
+        // APP_KEY yang diperlukan Laravel untuk enkripsi lokal.
         'AWS_*',
         'GITHUB_*',
         'DO_SPACES_*',
         '*_SECRET',
+        '*_KEY',
+        'SYNC_*',
+        'GEMINI_*',
+        'AWS_ACCESS_KEY_ID',
+        'AWS_SECRET_ACCESS_KEY',
+        'PUSHER_APP_KEY',
+        'PUSHER_APP_SECRET',
+        'VITE_PUSHER_APP_KEY',
+        'MAIL_USERNAME',
+        'MAIL_PASSWORD',
+        'REDIS_PASSWORD',
+        'DB_DATABASE',
         'DB_PASSWORD',
         'DB_USERNAME',
+        'GEMINI_API_KEY',
+        'BPS_API_KEY',
+        'SYNC_API_KEY',
+        'SYNC_BASE_URL',
+        'ANDROID_KEYSTORE_FILE',
+        'ANDROID_KEYSTORE_PASSWORD',
+        'ANDROID_KEY_ALIAS',
+        'ANDROID_KEY_PASSWORD',
+        'KEYSTORE_PASSWORD',
+        'KEY_PASSWORD',
+        'PHP_BINARY',
+        'NATIVEPHP_7ZIP_LOCATION',
     ],
 
     /*
@@ -125,10 +153,24 @@ return [
     */
 
     'cleanup_exclude_files' => [
+        // Jangan pernah memasukkan kunci, basis data lokal, log, atau
+        // artefak build ke dalam APK. Robocopy di Windows tidak mencocokkan
+        // path nested berformat slash, jadi varians backslash juga didaftarkan.
+        'android-keystore',
+        'keys',
+        'dist',
+        'database/private',
+        'database\\private',
+        'storage/logs',
+        'storage\\logs',
+        'storage/app/native-build',
+        'storage\\app\\native-build',
         'storage/framework/sessions',
+        'storage\\framework\\sessions',
         'storage/framework/cache',
+        'storage\\framework\\cache',
         'storage/framework/testing',
-        'storage/logs/laravel.log',
+        'storage\\framework\\testing',
     ],
 
     'android' => [

@@ -1,6 +1,6 @@
 <?php
 
 return [
-    'api_key' => env('SYNC_API_KEY'),
-    'base_url' => env('SYNC_BASE_URL'),
+    'timeout' => (int) env('SYNC_TIMEOUT', 20),
+    'connect_timeout' => (int) env('SYNC_CONNECT_TIMEOUT', 5),
 ];

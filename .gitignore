@@ -6,8 +6,11 @@
 /storage/android-temp*
 /vendor
 .env
+.env.*
+!.env.example
 .env.backup
 .env.production
+.phpunit.cache
 .phpunit.result.cache
 Homestead.json
 Homestead.yaml
@@ -25,16 +28,22 @@ yarn-error.log
 /credentials/
 /android-keystore/
 /keys/
+*.jks
+*.keystore
+*.p12
 
 # Build outputs and binaries
 /dist/
 /build-output/
+*.apk
+*.aab
 
 # Local database (recreated via migrate + seed)
 /database/*.sqlite
 /database/*.sqlite-journal
 /database/*.sqlite-wal
 /database/*.sqlite-shm
+/database/private/
 
 # Runtime cache
 /storage/framework/cache/*

@@ -8,10 +8,10 @@ return new class extends Migration
 {
     /**
      * Run the migrations.
-     * 
+     *
      * Tabel indicators untuk menyimpan data indikator statistik
      * dengan relasi ke tabel categories.
-     * 
+     *
      * Field is_higher_better digunakan untuk Smart Trend Logic:
      * - true: Indikator positif (Padi, PDRB) → Naik = Hijau, Turun = Merah
      * - false: Indikator negatif (Kemiskinan, Inflasi) → Naik = Merah, Turun = Hijau
@@ -20,13 +20,13 @@ return new class extends Migration
     {
         Schema::create('indicators', function (Blueprint $table) {
             $table->id();
-            
+
             // Foreign key ke categories
             $table->foreignId('category_id')
-                  ->constrained('categories')
-                  ->onDelete('cascade')
-                  ->onUpdate('cascade');
-            
+                ->constrained('categories')
+                ->onDelete('cascade')
+                ->onUpdate('cascade');
+
             $table->string('title', 255);              // Judul indikator (contoh: "Produksi Padi")
             $table->decimal('value', 20, 4);           // Nilai indikator (mendukung angka besar & desimal)
             $table->string('unit', 50);                // Satuan (contoh: "ton", "%", "rupiah")

@@ -2,69 +2,37 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasSyncState;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Support\Str;
+use NpAnalytics\Core\Models\Category as CoreCategory;
 
-class Category extends Model
+/**
+ * @property bool $dirty
+ * @property int $base_version
+ * @property int $server_version
+ */
+class Category extends CoreCategory
 {
     use HasFactory;
-    use SoftDeletes;
+    use HasSyncState;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var array<int, string>
-     */
-    protected $fillable = [
-        'uuid',
-        'name',
-        'icon',
-    ];
-
-    protected static function booted(): void
+    protected function casts(): array
     {
-        static::creating(function (Category $category): void {
-            if (empty($category->uuid)) {
-                $category->uuid = (string) Str::uuid();
-            }
-        });
-
-        static::deleting(function (Category $category): void {
-            if ($category->isForceDeleting()) {
-                return;
-            }
-
-            $category->indicators()->each(function (Indicator $indicator): void {
-                $indicator->delete();
-            });
-        });
-
-        static::restoring(function (Category $category): void {
-            $category->indicators()
-                ->withTrashed()
-                ->get()
-                ->each(function (Indicator $indicator): void {
-                    $indicator->restore();
-                });
-        });
+        return array_merge(parent::casts(), [
+            'server_version' => 'integer',
+            'base_version' => 'integer',
+            'dirty' => 'boolean',
+        ]);
     }
 
     /**
      * Get all indicators for this category.
+     *
+     * @return HasMany<Indicator, $this>
      */
     public function indicators(): HasMany
     {
         return $this->hasMany(Indicator::class);
-    }
-
-    /**
-     * Get the count of indicators in this category.
-     */
-    public function getIndicatorCountAttribute(): int
-    {
-        return $this->indicators()->count();
     }
 }

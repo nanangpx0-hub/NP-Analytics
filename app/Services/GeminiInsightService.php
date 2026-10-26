@@ -3,12 +3,14 @@
 namespace App\Services;
 
 use App\Models\AiInsight;
+use App\Models\DeviceCredential;
 use App\Models\Indicator;
+use App\Models\Phenomenon;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-use RuntimeException;
 use Throwable;
 
 class GeminiInsightService
@@ -19,12 +21,15 @@ class GeminiInsightService
 
     public function isConfigured(): bool
     {
-        return trim((string) config('gemini.api_key')) !== '';
+        $credential = DeviceCredential::active();
+
+        return $credential !== null && $credential->hasAbility('ai:insight');
     }
 
     public function modelName(): string
     {
-        return (string) config('gemini.model', 'gemini-2.5-flash');
+        // Model Gemini hanya diketahui server; nama stabil ini dipakai untuk hash cache lokal.
+        return 'server-proxy';
     }
 
     public function cachedForIndicator(Indicator $indicator, Collection $history): ?array
@@ -77,84 +82,85 @@ class GeminiInsightService
             return $cached;
         }
 
-        if (! $this->isConfigured()) {
+        $credential = DeviceCredential::active();
+
+        if (! $credential || ! $credential->hasAbility('ai:insight')) {
+            $notice = (new AiServiceException('not_configured', 'Device is not activated.'))->userNotice();
+
             return $cached !== null
-                ? $this->withNotice($cached, 'GEMINI_API_KEY belum diatur. Menampilkan analisis tersimpan terakhir dari perangkat.')
-                : $localFallback($context);
+                ? $this->withNotice($cached, $notice)
+                : $this->withNotice($localFallback($context), $notice);
         }
 
         try {
-            $content = $this->request($scope, $context);
-            $generatedAt = Carbon::now();
-            $this->store($hash, $scope, $indicator, $context, $content, $generatedAt);
+            $content = $this->request($credential, $scope, $context);
+            $generatedAt = $this->parseGeneratedAt($content['generated_at'] ?? null);
+            $model = (string) ($content['model'] ?? $this->modelName());
+            $this->store($hash, $scope, $indicator, $context, $content, $generatedAt, $model);
 
-            return $this->format($content, 'gemini', $generatedAt, $this->modelName());
+            return $this->format($content, 'gemini', $generatedAt, $model);
+        } catch (AiServiceException $exception) {
+            Log::warning('AI proxy request failed', [
+                'scope' => $scope,
+                'reason' => $exception->reason,
+            ]);
+
+            if ($cached !== null) {
+                return $this->withNotice($cached, $exception->userNotice());
+            }
+
+            return $this->withNotice($localFallback($context), $exception->userNotice());
         } catch (Throwable $exception) {
-            Log::warning('Gemini insight request failed', [
+            Log::warning('AI proxy request failed unexpectedly', [
                 'scope' => $scope,
                 'error' => $exception->getMessage(),
             ]);
 
-            if ($cached !== null) {
-                return $this->withNotice($cached, 'Gemini tidak dapat dihubungi. Menampilkan analisis tersimpan di perangkat.');
-            }
+            $notice = (new AiServiceException('unavailable', 'AI server unavailable.'))->userNotice();
 
-            return $this->withNotice(
-                $localFallback($context),
-                'Gemini tidak dapat dihubungi (offline atau layanan tidak tersedia). Menampilkan analisis lokal berbasis data.',
-            );
+            return $cached !== null
+                ? $this->withNotice($cached, $notice)
+                : $this->withNotice($localFallback($context), $notice);
         }
     }
 
-    private function request(string $scope, array $context): array
+    private function request(DeviceCredential $credential, string $scope, array $context): array
     {
-        $model = $this->modelName();
-        $endpoint = rtrim((string) config('gemini.endpoint', 'https://generativelanguage.googleapis.com/v1beta'), '/');
+        $baseUrl = rtrim($credential->server_url, '/');
+        $path = (string) config('gemini.path', '/api/ai/insight');
 
-        $response = Http::acceptJson()
-            ->withHeaders(['x-goog-api-key' => (string) config('gemini.api_key')])
-            ->connectTimeout((int) config('gemini.connect_timeout', 5))
-            ->timeout((int) config('gemini.timeout', 30))
-            ->post($endpoint . '/models/' . $model . ':generateContent', [
-                'systemInstruction' => [
-                    'parts' => [[
-                        'text' => 'Anda adalah analis data dan kebijakan daerah BPS Kabupaten Jember. Gunakan bahasa Indonesia formal, ringkas, dan berbasis data. Jangan mengarang angka. Jawab hanya dengan JSON valid sesuai skema.',
-                    ]],
-                ],
-                'contents' => [[
-                    'role' => 'user',
-                    'parts' => [[
-                        'text' => $this->prompt($scope, $context),
-                    ]],
-                ]],
-                'generationConfig' => [
-                    'temperature' => 0.4,
-                    'responseMimeType' => 'application/json',
-                    'responseSchema' => [
-                        'type' => 'OBJECT',
-                        'properties' => [
-                            'ringkasan_eksekutif' => ['type' => 'STRING'],
-                            'analisis_akar_masalah' => ['type' => 'STRING'],
-                            'rekomendasi_kebijakan' => [
-                                'type' => 'ARRAY',
-                                'items' => ['type' => 'STRING'],
-                            ],
-                        ],
-                        'required' => ['ringkasan_eksekutif', 'analisis_akar_masalah', 'rekomendasi_kebijakan'],
-                    ],
-                ],
-            ]);
-
-        if ($response->failed()) {
-            throw new RuntimeException('Gemini API returned HTTP ' . $response->status());
+        try {
+            $response = Http::withToken((string) $credential->token)
+                ->acceptJson()
+                ->connectTimeout((int) config('gemini.connect_timeout', 5))
+                ->timeout((int) config('gemini.timeout', 30))
+                ->post($baseUrl.$path, [
+                    'scope' => $scope,
+                    'context' => $context,
+                ]);
+        } catch (ConnectionException $exception) {
+            throw new AiServiceException('offline', 'AI server is unreachable.', $exception);
         }
 
-        $text = (string) data_get($response->json(), 'candidates.0.content.parts.0.text', '');
-        $data = $this->decodeResponse($text);
+        $status = $response->status();
 
-        $summary = trim((string) ($data['ringkasan_eksekutif'] ?? $data['summary'] ?? ''));
-        $rootCause = trim((string) ($data['analisis_akar_masalah'] ?? $data['root_cause'] ?? ''));
-        $recommendations = collect($data['rekomendasi_kebijakan'] ?? $data['recommendations'] ?? [])
+        if ($status === 401 || $status === 403) {
+            throw new AiServiceException('unauthorized', 'Device token rejected.');
+        }
+
+        if ($status === 429) {
+            throw new AiServiceException('rate_limited', 'AI rate limit exceeded.');
+        }
+
+        if (! $response->successful()) {
+            throw new AiServiceException('unavailable', 'AI server returned HTTP '.$status);
+        }
+
+        $data = $response->json();
+
+        $summary = trim((string) ($data['summary'] ?? ''));
+        $rootCause = trim((string) ($data['root_cause'] ?? ''));
+        $recommendations = collect($data['recommendations'] ?? [])
             ->filter(fn ($item): bool => is_string($item) && trim($item) !== '')
             ->map(fn (string $item): string => trim($item))
             ->take(self::MAX_RECOMMENDATIONS)
@@ -162,59 +168,29 @@ class GeminiInsightService
             ->all();
 
         if ($summary === '' || $rootCause === '' || $recommendations === []) {
-            throw new RuntimeException('Gemini returned an incomplete analysis payload.');
+            throw new AiServiceException('unavailable', 'AI server returned an incomplete analysis.');
         }
 
         return [
             'summary' => $summary,
             'root_cause' => $rootCause,
             'recommendations' => $recommendations,
+            'model' => $data['model'] ?? $this->modelName(),
+            'generated_at' => $data['generated_at'] ?? null,
         ];
     }
 
-    private function decodeResponse(string $text): array
+    private function parseGeneratedAt(?string $value): Carbon
     {
-        $text = trim($text);
-
-        if ($text === '') {
-            throw new RuntimeException('Gemini returned an empty response.');
+        if (! $value) {
+            return Carbon::now();
         }
 
-        if (str_starts_with($text, '```')) {
-            $text = preg_replace('/^```(?:json)?\s*|\s*```$/', '', $text) ?? $text;
+        try {
+            return Carbon::parse($value);
+        } catch (Throwable $exception) {
+            return Carbon::now();
         }
-
-        $data = json_decode($text, true);
-
-        if (! is_array($data)) {
-            throw new RuntimeException('Gemini response is not valid JSON.');
-        }
-
-        return $data;
-    }
-
-    private function prompt(string $scope, array $context): string
-    {
-        $data = json_encode($context, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        $focus = $scope === 'indicator'
-            ? 'Fokus pada indikator yang dianalisis: makna capaian, arah tren, akar masalah dari fenomena lokal, serta rekomendasi kebijakan yang dapat dijalankan pemerintah daerah.'
-            : 'Fokus pada gambaran kabupaten: indikator prioritas, keseimbangan tren positif dan negatif, akar masalah agregat, serta prioritas kebijakan daerah.';
-
-        return <<<PROMPT
-        Analisis konteks data statistik daerah berikut.
-
-        {$focus}
-
-        Konteks data (JSON):
-        {$data}
-
-        Hasilkan tepat tiga bagian:
-        1. ringkasan_eksekutif: 3-5 kalimat padat untuk pengambil keputusan.
-        2. analisis_akar_masalah: 3-5 kalimat yang menghubungkan angka, tren, dan fenomena lokal.
-        3. rekomendasi_kebijakan: 3-5 butir aksi konkret, terukur, dan relevan untuk Kabupaten Jember.
-
-        Jangan menambahkan angka yang tidak ada di konteks. Jangan menulis markdown.
-        PROMPT;
     }
 
     private function indicatorContext(Indicator $indicator, Collection $history): array
@@ -245,7 +221,7 @@ class GeminiInsightService
                 'nilai' => (float) $row->value,
                 'tren_persen' => $row->trend !== null ? (float) $row->trend : null,
             ])->values()->all(),
-            'fenomena_lokal' => $phenomena->take(10)->map(fn ($phenomenon): array => [
+            'fenomena_lokal' => $phenomena->take(10)->map(fn (Phenomenon $phenomenon): array => [
                 'judul' => $phenomenon->title,
                 'dampak' => $phenomenon->impact,
                 'deskripsi' => $phenomenon->description,
@@ -300,7 +276,7 @@ class GeminiInsightService
         $indicator = $context['indikator'];
         $trend = $indicator['tren_persen'];
         $higherIsBetter = (bool) $indicator['lebih_tinggi_lebih_baik'];
-        $formattedValue = number_format((float) $indicator['nilai'], 2, ',', '.') . ' ' . $indicator['satuan'];
+        $formattedValue = number_format((float) $indicator['nilai'], 2, ',', '.').' '.$indicator['satuan'];
 
         $trendText = $trend === null
             ? 'Data tren persentase belum tersedia untuk periode ini.'
@@ -328,22 +304,22 @@ class GeminiInsightService
             ->values();
 
         $rootCause = $negativePhenomena->isNotEmpty()
-            ? 'Fenomena lokal yang perlu ditelusuri sebagai akar masalah: ' . $negativePhenomena->implode('; ') . '.'
+            ? 'Fenomena lokal yang perlu ditelusuri sebagai akar masalah: '.$negativePhenomena->implode('; ').'.'
             : 'Belum ada fenomena negatif terverifikasi pada basis data lokal. Telusuri penyebab perubahan melalui data sektoral dan verifikasi lapangan sebelum menetapkan intervensi.';
 
         if (! empty($indicator['deskripsi'])) {
-            $rootCause .= ' Konteks indikator: ' . $indicator['deskripsi'];
+            $rootCause .= ' Konteks indikator: '.$indicator['deskripsi'];
         }
 
         if ($favorable === true) {
             $recommendations = [
-                'Pertahankan dan perluas program yang berkontribusi pada capaian positif ' . $indicator['judul'] . '.',
+                'Pertahankan dan perluas program yang berkontribusi pada capaian positif '.$indicator['judul'].'.',
                 'Dokumentasikan praktik baik lintas perangkat daerah agar capaian dapat direplikasi.',
                 'Lanjutkan pemantauan time-series dan bandingkan dengan wilayah pembanding.',
             ];
         } elseif ($favorable === false) {
             $recommendations = [
-                'Lakukan evaluasi mendalam atas penyebab perlambatan atau perburukan ' . $indicator['judul'] . '.',
+                'Lakukan evaluasi mendalam atas penyebab perlambatan atau perburukan '.$indicator['judul'].'.',
                 'Perkuat koordinasi lintas perangkat daerah untuk intervensi pada fenomena negatif yang tercatat.',
                 'Tetapkan target antara yang terukur dan pantau perkembangannya setiap periode rilis data.',
             ];
@@ -359,7 +335,7 @@ class GeminiInsightService
             'summary' => $summary,
             'root_cause' => $rootCause,
             'recommendations' => $recommendations,
-        ], 'local', Carbon::now(), null, 'Analisis lokal disusun dari data perangkat. Aktifkan GEMINI_API_KEY untuk analisis AI.');
+        ], 'local', Carbon::now(), null, 'Analisis lokal disusun dari data perangkat. Aktifkan perangkat di Pengaturan Sync untuk analisis AI server.');
     }
 
     private function localDashboardInsight(array $context): array
@@ -389,7 +365,7 @@ class GeminiInsightService
         );
 
         if ($priorityText !== '') {
-            $summary .= ' Perubahan terbesar: ' . $priorityText . '.';
+            $summary .= ' Perubahan terbesar: '.$priorityText.'.';
         }
 
         $rootCause = $negative > 0
@@ -412,7 +388,7 @@ class GeminiInsightService
             'summary' => $summary,
             'root_cause' => $rootCause,
             'recommendations' => $recommendations,
-        ], 'local', Carbon::now(), null, 'Analisis lokal disusun dari data perangkat. Aktifkan GEMINI_API_KEY untuk analisis AI.');
+        ], 'local', Carbon::now(), null, 'Analisis lokal disusun dari data perangkat. Aktifkan perangkat di Pengaturan Sync untuk analisis AI server.');
     }
 
     private function cached(string $hash): ?array
@@ -444,6 +420,7 @@ class GeminiInsightService
         array $context,
         array $content,
         Carbon $generatedAt,
+        string $model,
     ): void {
         try {
             AiInsight::query()->updateOrCreate(
@@ -452,7 +429,7 @@ class GeminiInsightService
                     'scope' => $scope,
                     'indicator_id' => $indicator?->id,
                     'year' => isset($context['tahun']) ? (int) $context['tahun'] : null,
-                    'model' => $this->modelName(),
+                    'model' => $model,
                     'source' => 'gemini',
                     'payload' => $content,
                     'generated_at' => $generatedAt,
@@ -469,7 +446,7 @@ class GeminiInsightService
     private function format(
         array $content,
         string $source,
-        ?Carbon $generatedAt,
+        ?\Carbon\Carbon $generatedAt,
         ?string $model,
         ?string $notice = null,
     ): array {

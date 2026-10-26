@@ -3,13 +3,13 @@
 namespace Tests\Unit;
 
 use App\Models\Category;
-use App\Models\Indicator;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 class IndicatorTest extends TestCase
 {
     use RefreshDatabase;
+
     /** @return \App\Models\Category */
     private function createCategory(): mixed
     {

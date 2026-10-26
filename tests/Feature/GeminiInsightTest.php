@@ -6,6 +6,7 @@ use App\Livewire\Dashboard;
 use App\Livewire\IndicatorDetail;
 use App\Models\AiInsight;
 use App\Models\Category;
+use App\Models\DeviceCredential;
 use App\Models\Indicator;
 use App\Services\GeminiInsightService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -16,6 +17,18 @@ use Tests\TestCase;
 class GeminiInsightTest extends TestCase
 {
     use RefreshDatabase;
+
+    private function linkDevice(): void
+    {
+        DeviceCredential::create([
+            'server_url' => 'https://sync.test',
+            'device_uuid' => '11111111-1111-4111-8111-111111111111',
+            'device_name' => 'Test Device',
+            'token' => 'ai-token',
+            'abilities' => ['sync:pull', 'sync:push', 'ai:insight'],
+            'last_registered_at' => now(),
+        ]);
+    }
 
     private function createIndicator(): Indicator
     {
@@ -45,32 +58,27 @@ class GeminiInsightTest extends TestCase
         return $indicator;
     }
 
-    private function geminiResponse(): array
+    private function aiResponse(): array
     {
         return [
-            'candidates' => [[
-                'content' => [
-                    'parts' => [[
-                        'text' => json_encode([
-                            'ringkasan_eksekutif' => 'Pertumbuhan ekonomi Jember 2025 tercatat 5,47 persen.',
-                            'analisis_akar_masalah' => 'Sektor pertanian dan perdagangan menjadi pendorong utama.',
-                            'rekomendasi_kebijakan' => [
-                                'Perkuat hilirisasi komoditas unggulan daerah.',
-                                'Jaga stabilitas harga pangan strategis.',
-                                'Perluas akses pasar bagi UMKM.',
-                            ],
-                        ], JSON_UNESCAPED_UNICODE),
-                    ]],
-                ],
-            ]],
+            'summary' => 'Pertumbuhan ekonomi Jember 2025 tercatat 5,47 persen.',
+            'root_cause' => 'Sektor pertanian dan perdagangan menjadi pendorong utama.',
+            'recommendations' => [
+                'Perkuat hilirisasi komoditas unggulan daerah.',
+                'Jaga stabilitas harga pangan strategis.',
+                'Perluas akses pasar bagi UMKM.',
+            ],
+            'model' => 'gemini-2.5-flash',
+            'generated_at' => '2026-10-25T10:00:00+00:00',
+            'source' => 'gemini',
         ];
     }
 
-    public function test_gemini_result_is_parsed_and_cached_in_sqlite(): void
+    public function test_ai_result_is_fetched_from_backend_proxy_and_cached_locally(): void
     {
-        config(['gemini.api_key' => 'test-key', 'gemini.model' => 'gemini-2.5-flash']);
+        $this->linkDevice();
         Http::fake([
-            'generativelanguage.googleapis.com/*' => Http::response($this->geminiResponse(), 200),
+            'sync.test/api/ai/insight' => Http::response($this->aiResponse(), 200),
         ]);
 
         $indicator = $this->createIndicator();
@@ -85,7 +93,10 @@ class GeminiInsightTest extends TestCase
         $this->assertSame('gemini-2.5-flash', $insight['model']);
         $this->assertSame(1, AiInsight::where('scope', 'indicator')->count());
 
-        Http::assertSentCount(1);
+        Http::assertSent(fn ($request): bool => $request->url() === 'https://sync.test/api/ai/insight'
+            && $request->hasHeader('Authorization', 'Bearer ai-token')
+            && $request['scope'] === 'indicator');
+        Http::assertNotSent(fn ($request): bool => str_contains($request->url(), 'generativelanguage.googleapis.com'));
 
         // Analisis kedua dengan konteks sama dibaca dari cache lokal, tanpa HTTP baru.
         $cached = $service->analyzeIndicator($indicator, $history, false);
@@ -95,9 +106,8 @@ class GeminiInsightTest extends TestCase
         Http::assertSentCount(1);
     }
 
-    public function test_missing_api_key_returns_local_insight_without_http_call(): void
+    public function test_unlinked_device_returns_local_insight_without_http_call(): void
     {
-        config(['gemini.api_key' => null]);
         Http::fake();
 
         $indicator = $this->createIndicator();
@@ -108,24 +118,24 @@ class GeminiInsightTest extends TestCase
         $this->assertSame('local', $insight['source']);
         $this->assertNotEmpty($insight['summary']);
         $this->assertNotEmpty($insight['recommendations']);
-        $this->assertStringContainsString('GEMINI_API_KEY', (string) $insight['notice']);
+        $this->assertStringContainsString('Perangkat belum diaktifkan', (string) $insight['notice']);
         Http::assertNothingSent();
     }
 
-    public function test_gemini_http_failure_falls_back_to_local_then_serves_cache(): void
+    public function test_backend_failure_falls_back_to_local_then_serves_cache(): void
     {
-        config(['gemini.api_key' => 'test-key']);
+        $this->linkDevice();
         $indicator = $this->createIndicator();
         $history = Indicator::where('title', $indicator->title)->get();
         $service = app(GeminiInsightService::class);
 
         $responses = [
-            Http::response(['error' => 'unavailable'], 503),
-            Http::response($this->geminiResponse(), 200),
-            Http::response(['error' => 'offline'], 500),
+            Http::response(['code' => 'ai_unavailable'], 503),
+            Http::response($this->aiResponse(), 200),
+            Http::response(['code' => 'rate_limited'], 429),
         ];
         Http::fake([
-            'generativelanguage.googleapis.com/*' => function () use (&$responses) {
+            'sync.test/api/ai/insight' => function () use (&$responses) {
                 return array_shift($responses);
             },
         ]);
@@ -133,24 +143,39 @@ class GeminiInsightTest extends TestCase
         $offline = $service->analyzeIndicator($indicator, $history);
 
         $this->assertSame('local', $offline['source']);
-        $this->assertStringContainsString('tidak dapat dihubungi', (string) $offline['notice']);
+        $this->assertStringContainsString('tidak tersedia', (string) $offline['notice']);
         $this->assertSame(0, AiInsight::count());
 
-        // Setelah ada hasil Gemini tersimpan, kegagalan berikutnya memakai cache.
         $service->analyzeIndicator($indicator, $history);
         $this->assertSame(1, AiInsight::count());
 
         $cached = $service->analyzeIndicator($indicator, $history);
 
         $this->assertSame('cache', $cached['source']);
-        $this->assertStringContainsString('tersimpan', (string) $cached['notice']);
+        $this->assertStringContainsString('Batas permintaan', (string) $cached['notice']);
+    }
+
+    public function test_revoked_device_falls_back_with_friendly_notice(): void
+    {
+        $this->linkDevice();
+        Http::fake([
+            'sync.test/api/ai/insight' => Http::response(['message' => 'Unauthenticated.'], 401),
+        ]);
+
+        $indicator = $this->createIndicator();
+        $history = Indicator::where('title', $indicator->title)->get();
+
+        $insight = app(GeminiInsightService::class)->analyzeIndicator($indicator, $history);
+
+        $this->assertSame('local', $insight['source']);
+        $this->assertStringContainsString('Sesi perangkat tidak valid', (string) $insight['notice']);
     }
 
     public function test_dashboard_ai_action_and_cached_render(): void
     {
-        config(['gemini.api_key' => 'test-key']);
+        $this->linkDevice();
         Http::fake([
-            'generativelanguage.googleapis.com/*' => Http::response($this->geminiResponse(), 200),
+            'sync.test/api/ai/insight' => Http::response($this->aiResponse(), 200),
         ]);
 
         $this->createIndicator();
@@ -164,7 +189,6 @@ class GeminiInsightTest extends TestCase
         $this->assertNotEmpty($insight['recommendations']);
         $this->assertSame(1, AiInsight::where('scope', 'dashboard')->count());
 
-        // Render ulang memakai cache dashboard tanpa memanggil Gemini lagi.
         Livewire::test(Dashboard::class)
             ->assertSee('Pertumbuhan ekonomi Jember 2025 tercatat 5,47 persen.');
 
@@ -173,9 +197,9 @@ class GeminiInsightTest extends TestCase
 
     public function test_indicator_detail_ai_action_and_panel_render(): void
     {
-        config(['gemini.api_key' => 'test-key']);
+        $this->linkDevice();
         Http::fake([
-            'generativelanguage.googleapis.com/*' => Http::response($this->geminiResponse(), 200),
+            'sync.test/api/ai/insight' => Http::response($this->aiResponse(), 200),
         ]);
 
         $indicator = $this->createIndicator();
@@ -189,15 +213,13 @@ class GeminiInsightTest extends TestCase
         $this->assertSame(1, AiInsight::where('scope', 'indicator')->count());
     }
 
-    public function test_ai_panel_handles_missing_key_on_detail_page(): void
+    public function test_ai_panel_handles_unlinked_device_on_detail_page(): void
     {
-        config(['gemini.api_key' => null]);
-
         $indicator = $this->createIndicator();
 
         $this->get("/indicators/{$indicator->id}")
             ->assertStatus(200)
             ->assertSee('Ringkasan &amp; Rekomendasi AI', false)
-            ->assertSee('GEMINI_API_KEY belum diatur');
+            ->assertSee('Perangkat belum diaktifkan');
     }
 }

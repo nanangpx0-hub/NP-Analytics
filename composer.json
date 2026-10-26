@@ -17,10 +17,21 @@
         "laravel/sanctum": "^4.0",
         "laravel/tinker": "^2.8",
         "livewire/livewire": "^3.0",
-        "nativephp/mobile": "^3.0"
+        "nativephp/mobile": "^3.0",
+        "np-analytics/core": "^1.0"
     },
+    "repositories": [
+        {
+            "type": "path",
+            "url": "packages/np-analytics-core",
+            "options": {
+                "symlink": false
+            }
+        }
+    ],
     "require-dev": {
         "fakerphp/faker": "^1.9.1",
+        "larastan/larastan": "^3.0",
         "laravel/pint": "^1.0",
         "laravel/sail": "^1.18",
         "mockery/mockery": "^1.4.4",

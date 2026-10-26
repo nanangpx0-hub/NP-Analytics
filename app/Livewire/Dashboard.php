@@ -5,10 +5,10 @@ namespace App\Livewire;
 use App\Models\Category;
 use App\Models\Indicator;
 use App\Services\GeminiInsightService;
-use Livewire\Component;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Attributes\Url;
+use Livewire\Component;
 
 #[Layout('layouts.app')]
 #[Title('Dashboard')]
@@ -34,7 +34,7 @@ class Dashboard extends Component
         }
 
         // Set default to latest year with comprehensive indicators (2025 or 2026)
-        if (empty($this->selectedYear) || !in_array((int) $this->selectedYear, array_map('intval', $this->availableYears), true)) {
+        if (empty($this->selectedYear) || ! in_array((int) $this->selectedYear, array_map('intval', $this->availableYears), true)) {
             $this->selectedYear = $this->availableYears[0];
         }
     }
@@ -85,10 +85,10 @@ class Dashboard extends Component
         return Category::with(['indicators' => function ($query) {
             $query->where('year', $this->selectedYear);
         }])
-        ->whereHas('indicators', function ($query) {
-            $query->where('year', $this->selectedYear);
-        })
-        ->get();
+            ->whereHas('indicators', function ($query) {
+                $query->where('year', $this->selectedYear);
+            })
+            ->get();
     }
 
     private function buildStats($categories): array

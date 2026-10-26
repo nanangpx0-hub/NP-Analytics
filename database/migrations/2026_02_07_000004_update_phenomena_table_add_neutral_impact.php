@@ -8,12 +8,12 @@ return new class extends Migration
 {
     /**
      * Run the migrations.
-     * 
+     *
      * Perbaikan struktur tabel phenomena sesuai Blueprint:
      * 1. Menambahkan 'neutral' ke enum impact
      * 2. Menambahkan field source untuk referensi
      * 3. Menambahkan field order untuk urutan tampilan
-     * 
+     *
      * Note: SQLite tidak mendukung ALTER COLUMN untuk mengubah enum.
      * Solusi: Buat tabel baru, pindahkan data, drop lama, rename baru.
      */
@@ -30,23 +30,23 @@ return new class extends Migration
         // 2. Buat tabel baru dengan struktur yang benar
         Schema::create('phenomena', function (Blueprint $table) {
             $table->id();
-            
+
             // Foreign key ke indicators
             $table->foreignId('indicator_id')
-                  ->constrained('indicators')
-                  ->onDelete('cascade')
-                  ->onUpdate('cascade');
-            
+                ->constrained('indicators')
+                ->onDelete('cascade')
+                ->onUpdate('cascade');
+
             $table->string('title', 255);         // Judul fenomena (ex: "Gagal Panen")
             $table->text('description');          // Penjelasan detail konteks kejadian
-            
+
             // Impact dengan 3 nilai sesuai Blueprint
             $table->enum('impact', ['positive', 'negative', 'neutral'])->default('neutral');
-            
+
             // Field tambahan untuk fitur lebih lengkap
             $table->string('source', 255)->nullable();  // Sumber referensi (ex: "Analisis BPS 2024")
             $table->integer('order')->default(0);       // Urutan tampilan
-            
+
             $table->timestamps();
 
             // Index untuk query
@@ -58,7 +58,7 @@ return new class extends Migration
         if (Schema::hasTable('phenomena_backup')) {
             // Copy data lama ke tabel baru
             $oldData = \DB::table('phenomena_backup')->get();
-            
+
             foreach ($oldData as $row) {
                 \DB::table('phenomena')->insert([
                     'id' => $row->id,
@@ -72,7 +72,7 @@ return new class extends Migration
                     'updated_at' => $row->updated_at,
                 ]);
             }
-            
+
             // Drop tabel backup
             Schema::dropIfExists('phenomena_backup');
         }
@@ -91,9 +91,9 @@ return new class extends Migration
         Schema::create('phenomena', function (Blueprint $table) {
             $table->id();
             $table->foreignId('indicator_id')
-                  ->constrained('indicators')
-                  ->onDelete('cascade')
-                  ->onUpdate('cascade');
+                ->constrained('indicators')
+                ->onDelete('cascade')
+                ->onUpdate('cascade');
             $table->string('title', 255);
             $table->text('description');
             $table->enum('impact', ['positive', 'negative']);
@@ -104,13 +104,13 @@ return new class extends Migration
         // Pindahkan data kembali
         if (Schema::hasTable('phenomena_new')) {
             $newData = \DB::table('phenomena_new')->get();
-            
+
             foreach ($newData as $row) {
                 // Skip neutral karena tidak ada di enum lama
                 if ($row->impact === 'neutral') {
                     continue;
                 }
-                
+
                 \DB::table('phenomena')->insert([
                     'id' => $row->id,
                     'indicator_id' => $row->indicator_id,
@@ -121,7 +121,7 @@ return new class extends Migration
                     'updated_at' => $row->updated_at,
                 ]);
             }
-            
+
             Schema::dropIfExists('phenomena_new');
         }
     }

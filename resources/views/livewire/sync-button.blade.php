@@ -1,7 +1,7 @@
 {{-- Tombol sinkronisasi kompak untuk navbar --}}
 <div class="relative flex items-center">
     <button type="button" wire:click="syncNow" wire:target="syncNow"
-        title="Sinkron dengan server (terakhir: {{ $this->lastSyncLabel }})"
+        title="Sinkron dengan server (terakhir: {{ $this->lastSyncLabel }}{{ $lastServerVersion !== null ? ', versi ' . $lastServerVersion : '' }})"
         class="relative grid h-10 w-10 place-items-center rounded-full text-white bg-white/10 active:bg-white/25 hover:bg-white/20 transition disabled:opacity-60"
         wire:loading.attr="disabled" wire:target="syncNow">
         {{-- Icon idle --}}
@@ -16,7 +16,7 @@
     </button>
 
     @if($message)
-        <div class="absolute top-12 right-0 z-[70] max-w-56 rounded-lg border px-3 py-2 text-xs shadow-xl {{ $status === 'error' ? 'border-red-200 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700' }}">
+        <div class="absolute top-12 right-0 z-[70] max-w-56 rounded-lg border px-3 py-2 text-xs shadow-xl {{ $status === 'error' ? 'border-red-200 bg-red-50 text-red-700' : ($status === 'warning' ? 'border-amber-200 bg-amber-50 text-amber-800' : 'border-emerald-200 bg-emerald-50 text-emerald-700') }}">
             {{ $message }}
         </div>
     @endif

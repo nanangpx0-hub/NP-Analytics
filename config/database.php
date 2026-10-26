@@ -2,7 +2,7 @@
 
 use Illuminate\Support\Str;
 
-$defaultSqlitePath = database_path('database.sqlite');
+$defaultSqlitePath = database_path('private/database.sqlite');
 $envSqlitePath = env('DB_DATABASE');
 
 // Avoid Windows drive-letter paths when running on non-Windows (e.g. Android/Linux)
@@ -14,7 +14,7 @@ $sqliteDatabasePath = $envSqlitePath ?: $defaultSqlitePath;
 
 return [
     'default' => env('DB_CONNECTION', 'sqlite'),
-    
+
     'connections' => [
         'sqlite' => [
             'driver' => 'sqlite',

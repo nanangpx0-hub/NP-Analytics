@@ -1,0 +1,19 @@
+{
+    "name": "np-analytics/core",
+    "description": "Shared domain models, enums, sync mapper, and master data for NP Analytics",
+    "type": "library",
+    "version": "1.0.0",
+    "license": "proprietary",
+    "require": {
+        "php": "^8.2",
+        "illuminate/database": "^11.0",
+        "illuminate/support": "^11.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "NpAnalytics\\Core\\": "src/"
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}

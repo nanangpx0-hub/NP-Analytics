@@ -1,8 +1,9 @@
 <?php
 
 use App\Livewire\Dashboard;
-use App\Livewire\IndicatorList;
 use App\Livewire\IndicatorDetail;
+use App\Livewire\IndicatorList;
+use App\Livewire\SyncSettings;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -29,6 +30,9 @@ Route::get('/indicators/{id}', IndicatorDetail::class)->name('indicators.show');
 // Category-specific indicators
 Route::get('/indicators/category/{categoryId}', IndicatorList::class)
     ->name('indicators.category');
+
+// Device activation and sync settings
+Route::get('/settings/sync', SyncSettings::class)->name('sync.settings');
 
 // Optional: API Routes for Mobile (if needed later)
 // Route::prefix('api')->group(function () {

@@ -8,7 +8,7 @@ return new class extends Migration
 {
     /**
      * Run the migrations.
-     * 
+     *
      * Tabel categories untuk menyimpan kategori indikator
      * seperti: Ekonomi, Sosial, Pertanian, dll.
      */

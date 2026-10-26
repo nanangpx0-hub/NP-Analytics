@@ -107,6 +107,51 @@
                         </svg>
                         Riwayat Perkembangan Indikator (Time-Series)
                     </h2>
+
+                    {{-- Grafik time-series lokal (SVG, tanpa CDN) --}}
+                    @if($chart)
+                        <figure class="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:p-4"
+                                data-testid="time-series-chart">
+                            <svg viewBox="0 0 {{ $chart['width'] }} {{ $chart['height'] }}"
+                                 class="h-auto w-full" role="img"
+                                 aria-label="Grafik time-series {{ $indicator->title }}">
+                                <title>Grafik time-series {{ $indicator->title }} ({{ $indicator->unit }})</title>
+                                <defs>
+                                    <linearGradient id="npChartArea" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stop-color="#d4a017" stop-opacity="0.28"></stop>
+                                        <stop offset="100%" stop-color="#d4a017" stop-opacity="0.02"></stop>
+                                    </linearGradient>
+                                </defs>
+
+                                @foreach($chart['grid'] as $line)
+                                    <line x1="{{ $chart['left'] }}" y1="{{ $line['y'] }}"
+                                          x2="{{ $chart['width'] - $chart['right'] }}" y2="{{ $line['y'] }}"
+                                          stroke="#e2e8f0" stroke-dasharray="3 3"></line>
+                                    <text x="{{ $chart['left'] - 8 }}" y="{{ $line['y'] + 4 }}"
+                                          text-anchor="end" font-size="10" fill="#64748b">{{ $line['label'] }}</text>
+                                @endforeach
+
+                                <polygon points="{{ $chart['area'] }}" fill="url(#npChartArea)"></polygon>
+                                <polyline points="{{ $chart['line'] }}" fill="none" stroke="#0f172a"
+                                          stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"></polyline>
+
+                                @foreach($chart['points'] as $point)
+                                    <circle cx="{{ $point['x'] }}" cy="{{ $point['y'] }}"
+                                            r="{{ $point['current'] ? 5 : 4 }}"
+                                            fill="{{ $point['current'] ? '#d4a017' : '#0f172a' }}"
+                                            stroke="#ffffff" stroke-width="2">
+                                        <title>{{ $point['year'] }}: {{ $point['label'] }} {{ $indicator->unit }}</title>
+                                    </circle>
+                                    <text x="{{ $point['x'] }}" y="{{ $chart['height'] - 16 }}"
+                                          text-anchor="middle" font-size="10" fill="#475569">{{ $point['year'] }}</text>
+                                @endforeach
+                            </svg>
+                            <figcaption class="mt-1 text-center text-[11px] text-slate-500">
+                                Grafik dari data lokal &middot; {{ count($chart['points']) }} titik tahun
+                            </figcaption>
+                        </figure>
+                    @endif
+
                     <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
                         @foreach($history as $item)
                             <a href="{{ route('indicators.show', $item->id) }}" wire:navigate

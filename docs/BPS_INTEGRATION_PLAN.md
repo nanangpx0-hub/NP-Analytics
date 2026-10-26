@@ -21,26 +21,34 @@ Non-goals for phase 1:
 
 ## 2. Verified codebase baseline
 
-Relevant existing assets:
+Relevant assets:
 
-- app/Models/Category.php, Indicator.php, Phenomenon.php
-- app/Http/Controllers/Api/SyncController.php
-- app/Http/Middleware/EnsureSyncKey.php
-- app/Services/SyncService.php
-- config/sync.php
-- database/migrations/2026_02_07_000002_create_indicators_table.php
-- database/migrations/2026_10_22_000003_add_provenance_metadata.php
-- tests/Feature/MasterStrategicDataJemberTest.php
-- tests/Feature/SyncKeyTest.php
+- `packages/np-analytics-core` — model domain, enum, mapper payload, dan data
+  master bersama (dipakai mobile dan backend melalui Composer path repository).
+- `np-analytics-backend/app/Http/Controllers/Api` — registrasi perangkat,
+  sync pull/push, dan proxy AI.
+- `np-analytics-backend/app/Services/SyncPullService.php`,
+  `SyncPushService.php`, `SyncVersion.php`.
+- `np-analytics-backend/app/Services/GeminiClient.php`.
+- `NP-Analytics/app/Services/SyncService.php`,
+  `GeminiInsightService.php`.
+- `NP-Analytics/docs/SYNC_GUIDE.md` — kontrak sinkronisasi terkini.
+- `tests/Feature/SyncAuthTest.php`, `SyncProtocolTest.php`,
+  `DeviceRegistrationTest.php`, `AiInsightProxyTest.php` (backend).
+- `NP-Analytics/tests/Feature/SyncServiceTest.php` (mobile).
 
-Current security behavior:
+Perilaku keamanan saat ini:
 
-- EnsureSyncKey allows empty key only in local.
-- Outside local, an empty key returns HTTP 503.
-- Provided keys are compared with hash_equals.
-- Mobile SyncService refuses an empty SYNC_API_KEY.
-
-This already satisfies the reject empty production sync key requirement. Documentation should state that production must configure SYNC_API_KEY.
+- Tidak ada shared `SYNC_API_KEY` di mobile. Setiap perangkat diaktifkan dengan
+  kode sekali pakai dan memakai token Sanctum berability
+  `sync:pull`/`sync:push`/`ai:insight`.
+- Sanctum tidak boleh fallback ke sesi web pada endpoint sync; middleware
+  mensyaratkan objek `Device` dengan ability yang sesuai.
+- Header `X-SYNC-KEY` hanya diterima bila `LEGACY_SYNC_KEY_ENABLED=true`
+  (default mati). Key melalui query string tidak pernah diterima.
+- Rate limit terpisah untuk registrasi, sync, dan AI.
+- `GEMINI_API_KEY` dan `BPS_API_KEY` hanya berada di server; mobile tidak
+  menyimpan API key apa pun.
 
 ## 3. BPS source baseline
 
@@ -82,14 +90,15 @@ Implementation must treat endpoint field names as unstable and validate them aga
 
 Rules:
 
-- Store BPS_API_KEY only in backend .env.
-- Never send BPS_API_KEY to mobile clients.
-- Mobile continues to use only SYNC_API_KEY for backend sync.
-- Backend admin ingestion endpoints require an admin session or a separate admin token.
+- Store BPS_API_KEY only in backend `.env`; never in mobile or Git.
+- Mobile hanya memakai token perangkat (Sanctum) untuk mengakses backend.
+- Backend admin ingestion endpoints require an admin session/role, not a sync
+  key.
 - Log BPS requests without query tokens.
 - Store raw responses with token query strings stripped.
-- Reject empty production sync keys, already implemented in EnsureSyncKey.
-- Add a backend config validation command that fails in non-local environments when SYNC_API_KEY or BPS_API_KEY is empty.
+- Add a backend config validation command that fails in non-local environments
+  when `BPS_API_KEY` is empty; device sync auth does not depend on a shared key.
+- Keep `LEGACY_SYNC_KEY_ENABLED=false`; the legacy header is for transition only.
 
 Recommended backend config:
 
@@ -446,10 +455,13 @@ Backend tests:
 
 Mobile/backend sync tests:
 
-- Existing SyncKeyTest remains green.
-- Empty production sync key returns 503.
-- hash_equals comparison remains in place.
-- Sync pull/push still works with existing fixtures.
+- `SyncAuthTest` and `DeviceRegistrationTest` remain green: activation code,
+  per-device abilities, token revocation, admin web session rejection.
+- `SyncProtocolTest` remains green: version cursor pagination, push CRUD,
+  conflict snapshot, idempotency, explicit nulls, cascade restore.
+- `NP-Analytics/tests/Feature/SyncServiceTest.php` remains green: bootstrap
+  tanpa duplikat, dirty tracking, konflik, pagination, offline handling.
+- `AiInsightProxyTest` remains green.
 
 Migration tests:
 

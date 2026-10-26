@@ -7,7 +7,8 @@ use App\Models\Indicator;
 use App\Models\Phenomenon;
 use Database\Seeders\MasterStrategicDataJemberSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Livewire\Livewire;
+use Illuminate\Support\Facades\Schema;
+use NpAnalytics\Core\Support\DeterministicUuid;
 use Tests\TestCase;
 
 class MasterStrategicDataJemberTest extends TestCase
@@ -94,6 +95,99 @@ class MasterStrategicDataJemberTest extends TestCase
         $this->assertEquals(2025, $history->last()->year);
     }
 
+    public function test_seeder_is_idempotent_and_uses_shared_deterministic_uuids(): void
+    {
+        $this->seed(MasterStrategicDataJemberSeeder::class);
+
+        $this->assertSame(8, Category::count());
+        $this->assertSame(66, Indicator::count());
+        $this->assertSame(16, Phenomenon::count());
+        $this->assertSame(0, Category::where('dirty', true)->count());
+        $this->assertSame(0, Indicator::where('dirty', true)->count());
+        $this->assertSame(0, Phenomenon::where('dirty', true)->count());
+
+        $category = Category::where('name', 'Ekonomi & PDRB')->firstOrFail();
+        $this->assertSame(DeterministicUuid::category('Ekonomi & PDRB'), $category->uuid);
+
+        $indicator = Indicator::where('series_key', DeterministicUuid::seriesKey('PDRB ADHK (Pertumbuhan Ekonomi)'))
+            ->where('year', 2025)
+            ->firstOrFail();
+        $this->assertSame(DeterministicUuid::indicator($indicator->series_key, 2025), $indicator->uuid);
+
+        $this->seed(MasterStrategicDataJemberSeeder::class);
+
+        $this->assertSame(8, Category::count());
+        $this->assertSame(66, Indicator::count());
+        $this->assertSame(16, Phenomenon::count());
+        $this->assertSame(0, Indicator::where('dirty', true)->count());
+    }
+
+    public function test_seeder_does_not_overwrite_existing_local_records(): void
+    {
+        $this->seed(MasterStrategicDataJemberSeeder::class);
+
+        $indicator = Indicator::where('series_key', DeterministicUuid::seriesKey('PDRB ADHK (Pertumbuhan Ekonomi)'))
+            ->where('year', 2025)
+            ->firstOrFail();
+        $indicator->update(['value' => 99.5]);
+
+        $this->seed(MasterStrategicDataJemberSeeder::class);
+
+        $this->assertEquals(99.5, $indicator->fresh()->value);
+    }
+
+    public function test_history_is_resolved_by_series_key_not_title(): void
+    {
+        $category = Category::create(['name' => 'Uji Seri']);
+
+        Indicator::create([
+            'category_id' => $category->id,
+            'series_key' => 'seri-uji',
+            'title' => 'Judul Lama',
+            'value' => 1,
+            'unit' => '%',
+            'year' => 2024,
+            'is_higher_better' => true,
+        ]);
+
+        $current = Indicator::create([
+            'category_id' => $category->id,
+            'series_key' => 'seri-uji',
+            'title' => 'Judul Baru',
+            'value' => 2,
+            'unit' => '%',
+            'year' => 2025,
+            'is_higher_better' => true,
+        ]);
+
+        // Judul sama tetapi seri berbeda tidak boleh ikut masuk riwayat.
+        Indicator::create([
+            'category_id' => $category->id,
+            'series_key' => 'seri-lain',
+            'title' => 'Judul Baru',
+            'value' => 3,
+            'unit' => '%',
+            'year' => 2026,
+            'is_higher_better' => true,
+        ]);
+
+        $years = $current->history->pluck('year')->all();
+
+        $this->assertSame([2024, 2025], $years);
+    }
+
+    public function test_preferred_direction_is_derived_from_is_higher_better(): void
+    {
+        $this->seed(MasterStrategicDataJemberSeeder::class);
+
+        $pdrb = Indicator::where('title', 'PDRB ADHK (Pertumbuhan Ekonomi)')->where('year', 2025)->firstOrFail();
+        $kemiskinan = Indicator::where('title', 'Tingkat Kemiskinan (P0)')->where('year', 2026)->firstOrFail();
+
+        $this->assertSame('higher', $pdrb->preferred_direction);
+        $this->assertSame('lower', $kemiskinan->preferred_direction);
+        $this->assertFalse(Schema::hasColumn('indicators', 'preferred_direction'));
+    }
+
     public function test_dashboard_renders_with_real_statistics(): void
     {
         $this->seed(MasterStrategicDataJemberSeeder::class);
@@ -102,6 +196,7 @@ class MasterStrategicDataJemberTest extends TestCase
         $response->assertStatus(200);
         $response->assertSee('Dashboard Statistik');
         $response->assertSee('Ekonomi &amp; PDRB', false);
+        $response->assertSee('data-testid="offline-indicator"', false);
     }
 
     public function test_indicator_list_and_detail_routes_function_properly(): void
@@ -121,5 +216,8 @@ class MasterStrategicDataJemberTest extends TestCase
         $detailResponse->assertSee('5,47');
         $detailResponse->assertSee('Riwayat Perkembangan Indikator');
         $detailResponse->assertSee('Metadata', false);
+        $detailResponse->assertSee('data-testid="time-series-chart"', false);
+        $detailResponse->assertSee('<polyline', false);
+        $detailResponse->assertSee('Grafik time-series PDRB ADHK (Pertumbuhan Ekonomi)');
     }
 }

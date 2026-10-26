@@ -2,8 +2,8 @@
 
 **Proyek:** NP Analytics — Aplikasi Statistik Daerah Offline-First
 **Target perangkat:** POCO X7 (Android 14–17 / API 34–37, HyperOS, MediaTek Dimensity 7300-Ultra, RAM 8/12 GB, layar 120 Hz)
-**Tanggal rilis APK terakhir:** 25 Oktober 2026
-**Status:** Selesai — 23 test lulus, build APK release tertanda tangan dan terverifikasi
+**Tanggal rilis APK terakhir:** 26 Oktober 2026
+**Status:** Hardening FASE 1–6 selesai — 50 test mobile lulus. APK release bertanda tangan sudah dibangun dan diverifikasi; bundel tidak memuat keystore, database lokal, log, atau API key.
 
 ---
 
@@ -17,7 +17,7 @@ Optimasi mencakup lima area:
 | UI/UX HyperOS | Edge-to-edge, safe area, status bar terang, navigasi SPA |
 | Performa | SQLite WAL + mmap + cache, sinkronisasi transaksional, query dashboard tunggal, OPcache |
 | Gemini AI | Analisis indikator & dashboard, cache offline di SQLite, fallback lokal |
-| Distribution | APK release signed `arm64-v8a`, versionCode 35, siap sideload |
+| Distribution | APK release signed `arm64-v8a`, versionCode 41, siap sideload |
 
 ---
 
@@ -244,34 +244,34 @@ if (isDebuggable) {
 
 ---
 
-## 5. Gemini AI
+## 5. Analisis AI (Proxy Backend)
 
-### 5.1 Konfigurasi
+### 5.1 Arsitektur
 
-File: `config/gemini.php`
+Mobile **tidak pernah** memanggil Gemini langsung dan **tidak menyimpan API key
+Gemini**. Semua analisis diproksikan ke backend:
+
+- Mobile: membangun konteks dari data lokal, memanggil
+  `POST /api/ai/insight` dengan token perangkat (ability `ai:insight`).
+- Backend: memanggil Gemini memakai `GEMINI_API_KEY` milik server, menyimpan
+  cache berdasarkan hash konteks, dan menerapkan rate limit per perangkat.
+- Offline atau server tidak dikonfigurasi: mobile memakai cache lokal, lalu
+  fallback analisis lokal deterministik dari data perangkat.
+
+Konfigurasi mobile (`config/gemini.php`) hanya berisi path dan timeout:
 
 ```php
 return [
-    'api_key' => env('GEMINI_API_KEY'),
-    'model' => env('GEMINI_MODEL', 'gemini-2.5-flash'),
-    'endpoint' => env('GEMINI_ENDPOINT', 'https://generativelanguage.googleapis.com/v1beta'),
+    'path' => env('AI_INSIGHT_PATH', '/api/ai/insight'),
     'timeout' => (int) env('GEMINI_TIMEOUT', 30),
     'connect_timeout' => (int) env('GEMINI_CONNECT_TIMEOUT', 5),
 ];
 ```
 
-Variabel `.env`:
-
-```env
-GEMINI_API_KEY=
-GEMINI_MODEL=gemini-2.5-flash
-GEMINI_TIMEOUT=30
-GEMINI_CONNECT_TIMEOUT=5
-```
+`GEMINI_API_KEY`, `GEMINI_MODEL`, dan `AI_CACHE_TTL_MINUTES` hanya ada di
+`.env` backend.
 
 ### 5.2 Alur Analisis
-
-File: `app/Services/GeminiInsightService.php`
 
 ```
 Aksi Livewire
@@ -282,29 +282,30 @@ Bangun konteks (indikator / dashboard)
     ▼
 Hash SHA-256 = prompt_version | scope | model | JSON konteks
     │
-    ├── Cache ditemukan & tidak dipaksa refresh → tampilkan cache
+    ├── Cache lokal ditemukan & tidak dipaksa refresh → tampilkan cache
     │
     ▼
-Request Gemini (JSON schema, temperature 0.4)
+POST /api/ai/insight (Bearer token perangkat)
     │
-    ├── Sukses → simpan ke ai_insights → tampilkan sumber "Gemini"
+    ▼
+Backend: cache hash konteks → Gemini (key server)
     │
-    └── Gagal / offline
+    ├── Sukses → simpan ke ai_insights lokal → tampilkan sumber "Gemini"
+    │
+    └── Offline / 503 / gagal
             ├── Cache tersedia → tampilkan cache + notice
             └── Tidak ada cache → analisis lokal + notice
 ```
 
-Konten analisis:
-
-1. `ringkasan_eksekutif` — 3–5 kalimat
-2. `analisis_akar_masalah` — 3–5 kalimat
-3. `rekomendasi_kebijakan` — 3–5 butir (maksimum 6 disimpan)
-
-Konteks indikator mencakup nilai, satuan, tren, `is_higher_better`, deskripsi, time-series, dan maksimal 10 fenomena lokal. Konteks dashboard mencakup statistik agregat, daftar kategori, dan 10 indikator dengan perubahan tren terbesar.
+Konten analisis: `summary`, `root_cause`, dan `recommendations` (maksimum 6
+disimpan). Konteks indikator mencakup nilai, satuan, tren,
+`is_higher_better`, deskripsi, time-series, dan maksimal 10 fenomena lokal.
+Konteks dashboard mencakup statistik agregat, kategori, dan 10 indikator dengan
+perubahan tren terbesar.
 
 ### 5.3 Cache Offline
 
-Tabel: `ai_insights`
+Tabel: `ai_insights` (mobile)
 
 | Kolom | Tipe | Keterangan |
 |-------|------|------------|
@@ -312,12 +313,13 @@ Tabel: `ai_insights`
 | `scope` | string(20) | `indicator` atau `dashboard` |
 | `indicator_id` | FK nullable | `nullOnDelete` |
 | `year` | integer nullable | Tahun data |
-| `model` | string(80) | Model Gemini yang dipakai |
-| `source` | string(20) | Default `gemini` |
+| `model` | string(80) nullable | Nama model stabil dari server |
+| `source` | string(20) | `gemini`, `cache`, atau `local` |
 | `payload` | json | Ringkasan, akar masalah, rekomendasi |
-| `generated_at` | timestamp | Waktu analisis |
+| `generated_at` | timestamp nullable | Waktu analisis |
 
-Karena hash mencakup seluruh konteks data, perubahan angka atau fenomena otomatis menghasilkan cache baru. Cache tetap dapat dibaca saat perangkat offline.
+Perubahan angka atau fenomena menghasilkan hash baru sehingga cache tidak
+basi. Cache tetap dapat dibaca saat perangkat offline.
 
 ### 5.4 Komponen UI
 
@@ -325,16 +327,19 @@ File: `resources/views/components/ai-insight-panel.blade.php`
 
 - Header "Ringkasan & Rekomendasi AI"
 - Badge sumber: **Gemini**, **Tersimpan offline**, atau **Analisis lokal**
-- Tombol: "Analisis Gemini", "Analisis Offline", atau "Perbarui Analisis"
+- Tombol analisis/perbarui sesuai ketersediaan perangkat dan cache
 - Status loading "Menganalisis..." dengan `wire:target`
 - Notice kegagalan/ketersediaan cache
 - Tiga bagian semantik: ringkasan eksekutif, akar masalah, rekomendasi
 
-Digunakan di dashboard (`.resources/views/livewire/dashboard.blade.php`) dan detail indikator (`resources/views/livewire/indicator-detail.blade.php`).
+Digunakan di dashboard dan detail indikator.
 
 ### 5.5 Catatan Implementasi Livewire
 
-Livewire menggabungkan properti publik ke data view **setelah** data dari `render()`. Properti publik `?array $aiInsight = null` akan menimpa hasil cache jika dikirim dengan nama kunci yang sama. Karena itu kedua komponen mengirim hasil resolusi dengan nama **`resolvedAiInsight`**:
+Livewire menggabungkan properti publik ke data view **setelah** data dari
+`render()`. Properti publik `?array $aiInsight = null` akan menimpa hasil cache
+jika dikirim dengan nama kunci yang sama. Karena itu kedua komponen mengirim
+hasil resolusi dengan nama **`resolvedAiInsight`**:
 
 ```php
 $resolvedAiInsight = $this->aiInsight ?? $gemini->cachedForDashboard(...);
@@ -342,15 +347,15 @@ $resolvedAiInsight = $this->aiInsight ?? $gemini->cachedForDashboard(...);
 
 Jangan mengganti nama kunci ini tanpa memahami perilaku tersebut.
 
-### 5.6 Keamanan API Key
+### 5.6 Keamanan
 
-NativePHP membundel `.env` ke dalam APK. Artinya `GEMINI_API_KEY` dapat diekstrak dari perangkat. Untuk distribusi luas:
-
-- Gunakan API key terbatas (quota kecil, khusus aplikasi ini).
-- Pertimbangkan proxy backend agar key tidak berada di perangkat.
-- Rotasi key jika APK dibagikan di luar lingkungan internal.
-
-`cleanup_env_keys` di `config/nativephp.php` tidak menghapus `GEMINI_API_KEY`; tambahkan secara eksplisit bila analisis AI ingin dinonaktifkan pada build tertentu.
+- Tidak ada `GEMINI_API_KEY`, `BPS_API_KEY`, atau password di source, `.env`
+  mobile, maupun APK.
+- Token perangkat disimpan terenkripsi di SQLite dan dapat dicabut admin.
+- `cleanup_env_keys` di `config/nativephp.php` memuat `*_KEY`, `SYNC_*`, dan
+  `GEMINI_*` sehingga variabel sensitif tidak ikut dibundel.
+- Rate limit AI dan cache di server mencegah penyalahgunaan kunci.
+- Rotasi `GEMINI_API_KEY` cukup dilakukan di server; APK tidak perlu diubah.
 
 ---
 
@@ -358,28 +363,22 @@ NativePHP membundel `.env` ke dalam APK. Artinya `GEMINI_API_KEY` dapat diekstra
 
 ### 6.1 Prasyarat
 
-| Komponen | Nilai terverifikasi |
-|----------|---------------------|
-| PHP | 8.3.32 (Laragon) |
-| Node.js | 24.18.0 |
-| JDK | 17 (`C:\laragon\java17`) |
-| Android SDK | `C:\Users\IPDS\AppData\Local\Android\Sdk` |
-| Build-tools | 37.0.0 |
-| compileSdk / targetSdk | 36 / 36 |
-| minSdk | 33 |
-| ABI | `arm64-v8a` |
-| Keystore | `android-keystore/np-analytics.keystore` |
+- PHP 8.3, Node.js 20+, JDK 17, Android SDK + build-tools.
+- compileSdk/targetSdk 36, minSdk 33, ABI `arm64-v8a`.
+- Keystore release di `android-keystore/` (diabaikan Git).
 
-Konfigurasi signing berada di `nativephp/android/gradle.properties`:
+Signing dibaca dari environment berikut; nilainya tidak boleh disimpan di
+repository, dokumentasi, atau shell history bersama:
 
-```properties
-MYAPP_UPLOAD_STORE_FILE=...
-MYAPP_UPLOAD_KEY_ALIAS=npanalytics
-MYAPP_UPLOAD_STORE_PASSWORD=...
-MYAPP_UPLOAD_KEY_PASSWORD=...
-```
+| Environment variable | Keterangan |
+|----------------------|------------|
+| `ANDROID_KEYSTORE_FILE` | Path ke `android-keystore/np-analytics.keystore` |
+| `ANDROID_KEYSTORE_PASSWORD` | Password keystore |
+| `ANDROID_KEY_ALIAS` | `npanalytics` |
+| `ANDROID_KEY_PASSWORD` | Password key |
 
-Jangan menuliskan atau membagikan nilai password. File ini bersifat rahasia.
+`nativephp/android/gradle.properties` bersifat generated dan diabaikan Git;
+file tersebut dapat memuat konfigurasi signing, jadi jangan pernah di-commit.
 
 ### 6.2 Langkah Build
 
@@ -390,26 +389,25 @@ npm run build
 # 2. Jalankan seluruh test
 php artisan test
 
-# 3. Pastikan identitas aplikasi di .env
-#    NATIVEPHP_APP_ID=com.nanang.npanalytics
-#    NATIVEPHP_APP_VERSION=1.0.0
-#    NATIVEPHP_APP_VERSION_CODE=<angka build berikutnya>
+# 3. Set kredensial signing untuk sesi shell ini (jangan ditulis di repo)
+export ANDROID_KEYSTORE_FILE="android-keystore/np-analytics.keystore"
+export ANDROID_KEY_ALIAS="npanalytics"
+export ANDROID_KEYSTORE_PASSWORD="..."   # dari tempat penyimpanan aman
+export ANDROID_KEY_PASSWORD="..."
 
 # 4. Package APK release bertanda tangan
-php artisan native:package android --build-type=release --no-tty --no-interaction \
-  --keystore="C:/laragon/www/nanangpx/NP-Analytics/android-keystore/np-analytics.keystore" \
-  --keystore-password="<STORE_PASSWORD>" \
-  --key-alias="npanalytics" \
-  --key-password="<KEY_PASSWORD>" \
-  --output=dist
+php artisan native:package android --build-type=release --no-tty --no-interaction --output=dist
 ```
 
 Catatan:
 
-- Parameter signing harus diberikan eksplisit pada perintah; command memvalidasinya terpisah dari `gradle.properties`.
-- Proses memakan waktu beberapa menit karena Gradle melakukan kompilasi native.
-- NativePHP menaikkan `NATIVEPHP_APP_VERSION_CODE` di `.env` **setelah** build sukses. Build 25 Oktober 2026 menghasilkan versionCode **35**, lalu `.env` menjadi **36** untuk rilis berikutnya.
-- Jangan memakai `--skip-prepare` kecuali memang ingin mempertahankan kondisi project Android yang ada.
+- Command memvalidasi empat parameter signing tersebut secara terpisah dari
+  `gradle.properties`.
+- Proses memakan waktu beberapa menit karena Gradle mengompilasi native.
+- NativePHP menaikkan `NATIVEPHP_APP_VERSION_CODE` di `.env` **setelah** build
+  sukses.
+- Jangan memakai `--skip-prepare` kecuali memang ingin mempertahankan kondisi
+  project Android yang ada.
 
 ### 6.3 Verifikasi Wajib
 
@@ -437,25 +435,39 @@ Yang harus terlihat:
 - `resizeableActivity=true`
 - Tidak ada `screenOrientation`
 
-### 6.4 Artefak Rilis 25 Oktober 2026
+Periksa juga isi bundel Laravel. Hasil `findstr` harus kosong:
+
+```bat
+"%ProgramFiles%\7-Zip\7z.exe" e -so dist\app-release.apk assets\laravel_bundle.zip > bundle-audit.zip
+"%ProgramFiles%\7-Zip\7z.exe" l bundle-audit.zip | findstr /I "android-keystore .jks .sqlite laravel.log dist/app-release"
+del bundle-audit.zip
+```
+
+APK tidak membawa keystore, database pengembangan, log, atau APK lama.
+Satu-satunya nilai sensitif di `.env` bundel adalah `APP_KEY` Laravel yang
+dibutuhkan untuk enkripsi lokal; tidak ada API key atau password layanan.
+Database lokal dibuat otomatis di `database/private/database.sqlite` saat
+aplikasi pertama kali dijalankan, lalu migrasi dan seeder dijalankan.
+
+### 6.4 Artefak rilis terakhir (26 Oktober 2026)
 
 | Item | Nilai |
 |------|-------|
 | Lokasi utama | `dist/app-release.apk` |
 | Salinan Gradle | `nativephp/android/app/build/outputs/apk/release/app-release.apk` |
-| Ukuran | 69.187.540 bytes (65,98 MB) |
+| Ukuran | 69.196.840 bytes (65,99 MB) |
 | Package | `com.nanang.npanalytics` |
 | versionName | `1.0.0` |
-| versionCode | `35` |
+| versionCode | `41` |
 | Target SDK | `36` |
 | ABI | `arm64-v8a` |
-| SHA-256 APK | `437ec9f13ac60eac36352dd7c071a4ef576aa9adb25ef415509e9661d9391efb` |
+| SHA-256 APK | `89b5758ba4afca65ec4e971e5cbf34fe5e3bf3f6d1a16c340d133376ae2d104c` |
 | Sertifikat | v2, `CN=NP Analytics`, SHA-256 `048d92a411348d103ed860e8570fb92dc696c5922bff98866b10add059497b14` |
 
-Instalasi ke perangkat:
+Instalasi ke perangkat (ganti path sesuai lokasi Anda):
 
 ```bash
-adb install -r "C:\laragon\www\nanangpx\NP-Analytics\dist\app-release.apk"
+adb install -r dist/app-release.apk
 ```
 
 ### 6.5 Troubleshooting
@@ -477,16 +489,29 @@ Perintah:
 
 ```bash
 php artisan test
+vendor/bin/pint --test
+vendor/bin/phpstan analyse
 ```
 
-Hasil terakhir: **23 test lulus, 107 assertions**.
+Hasil terakhir: **50 test lulus, 233 assertions**.
 
 Cakupan penting:
 
-- `tests/Feature/GeminiInsightTest.php` — 6 test: parsing & cache, tanpa API key, kegagalan HTTP lalu fallback cache, aksi dashboard, aksi detail indikator, panel tanpa API key.
-- `tests/Feature/SyncServiceTest.php` — 2 test: pull penuh dalam satu transaksi, pull kedua memperbarui tanpa duplikasi.
-- `tests/Feature/MasterStrategicDataJemberTest.php` — data strategis dan statistik dashboard.
-- `tests/Unit/IndicatorTest.php` — Smart Trend Logic, format nilai, UUID, relasi.
+- `tests/Feature/SyncServiceTest.php` — 12 test: bootstrap tanpa duplikat,
+  dirty tracking, konflik & resolusi, null eksplisit, pagination, offline,
+  rate limit, lock sync.
+- `tests/Feature/DatabaseBootstrapperTest.php` — 4 test: migrasi saat
+  versionCode berubah, idempoten, dan tidak menghapus data.
+- `tests/Feature/ReleaseBundleSafetyTest.php` — 3 test: pembuatan database baru,
+  database in-memory, dan daftar eksklusi bundel/API key.
+- `tests/Feature/GeminiInsightTest.php` — 7 test: klien proxy, cache lokal,
+  fallback lokal saat offline/503, panel dashboard/detail.
+- `tests/Feature/DeviceCredentialTest.php` — 3 test: penyimpanan token
+  terenkripsi dan pemutusan perangkat.
+- `tests/Feature/SourceEncodingTest.php` — UTF-8 tanpa BOM.
+- `tests/Feature/SyncButtonTest.php` — pesan sync dan pencegahan sync ganda.
+- `tests/Feature/MasterStrategicDataJemberTest.php` — data master dan statistik.
+- `tests/Unit/IndicatorTest.php` — Smart Trend Logic, format, UUID, relasi.
 
 Verifikasi frontend:
 
@@ -502,27 +527,31 @@ Build Vite berhasil dan utility safe-area ikut terkompilasi ke `public/build`.
 
 | File | Perubahan |
 |------|-----------|
-| `app/Providers/AppServiceProvider.php` | Pragma SQLite, auto-migrate/seed non-console |
-| `app/Services/SyncService.php` | Pull transaksional + peta UUID |
-| `app/Services/GeminiInsightService.php` | Analisis Gemini, cache, fallback lokal |
+| `app/Providers/AppServiceProvider.php` | Pragma SQLite, pembuatan file DB, lewati inisialisasi saat package discovery |
+| `app/Services/SyncService.php` | Protokol versi, pull/push, konflik, dedupe |
+| `app/Services/GeminiInsightService.php` | Klien proxy AI, cache lokal, fallback lokal |
+| `app/Services/DatabaseBootstrapper.php` | Migrasi sekali per versionCode, pembuatan database baru |
+| `config/database.php` | Database lokal di `database/private` |
+| `app/Livewire/SyncSettings.php` | Aktivasi perangkat & resolusi konflik |
+| `app/Models/Concerns/HasSyncState.php` | Penanda `dirty`/`base_version` |
 | `app/Models/AiInsight.php` | Model cache AI |
-| `app/Livewire/Dashboard.php` | Statistik dari relasi, aksi AI, `resolvedAiInsight` |
-| `app/Livewire/IndicatorDetail.php` | Histori time-series, aksi AI, `resolvedAiInsight` |
-| `config/gemini.php` | Konfigurasi Gemini |
-| `config/nativephp.php` | Status bar light, orientasi Android penuh |
+| `app/Models/DeviceCredential.php` | Token perangkat terenkripsi |
+| `packages/np-analytics-core` | Model/enum/mapper/data master bersama |
+| `config/gemini.php` | Path dan timeout proxy AI |
+| `config/nativephp.php` | Status bar light, orientasi, eksklusi bundel dan kunci env |
 | `database/migrations/2026_10_25_000001_create_ai_insights_table.php` | Tabel cache AI |
+| `database/migrations/2026_10_25_100000_create_device_credentials_table.php` | Tabel token perangkat |
+| `database/migrations/2026_10_25_120001_add_sync_protocol_to_mobile_tables.php` | Kolom versi/dirty/konflik |
 | `resources/views/components/ai-insight-panel.blade.php` | Panel AI semantik |
-| `resources/views/layouts/app.blade.php` | Meta color-scheme, safe area, `wire:navigate` |
-| `resources/views/livewire/dashboard.blade.php` | Integrasi panel AI |
-| `resources/views/livewire/indicator-detail.blade.php` | Integrasi panel AI |
-| `resources/css/app.css` | Utility safe area, progress bar, `color-scheme` |
+| `resources/views/livewire/sync-settings.blade.php` | UI aktivasi & konflik |
 | `nativephp/android/app/src/main/AndroidManifest.xml` | Predictive Back, multi-window, target API 36 |
 | `nativephp/android/app/src/main/java/com/nativephp/mobile/ui/MainActivity.kt` | Status bar light, callback back, insets |
 | `nativephp/android/app/src/main/java/com/nativephp/mobile/bridge/LaravelEnvironment.kt` | OPcache, maintenance kondisional |
 | `nativephp/android/app/src/main/java/com/nativephp/mobile/network/WebViewManager.kt` | Debug WebView kondisional, blokir dark mode algoritmik |
-| `.env.example` | Variabel Gemini |
-| `tests/Feature/GeminiInsightTest.php` | Test integrasi Gemini |
-| `tests/Feature/SyncServiceTest.php` | Test sinkronisasi |
+| `.env.example` | Path proxy AI dan timeout (tanpa API key) |
+| `tests/Feature/SyncServiceTest.php` | Test protokol sinkronisasi |
+| `tests/Feature/DatabaseBootstrapperTest.php` | Test migrasi saat upgrade |
+| `tests/Feature/ReleaseBundleSafetyTest.php` | Test keamanan bundel APK dan bootstrap DB |
 
 ---
 
@@ -531,6 +560,6 @@ Build Vite berhasil dan utility safe-area ikut terkompilasi ke `public/build`.
 1. **Backup keystore.** Kehilangan `android-keystore/np-analytics.keystore` berarti aplikasi tidak dapat diperbarui dengan tanda tangan yang sama.
 2. **Naikkan versionCode setiap rilis.** NativePHP melakukannya otomatis saat packaging, tetapi verifikasi nilai pada APK tetap diperlukan.
 3. **Perbarui dokumentasi bila mengubah perilaku Livewire.** Nama `resolvedAiInsight` adalah invariant yang mencegah cache tertimpa properti publik.
-4. **Perubahan pada folder `nativephp/android`** dapat tertimpa saat upgrade NativePHP atau `native:install --force`. Folder `nativephp/` diabaikan Git, tetapi empat file patch (`AndroidManifest.xml`, `MainActivity.kt`, `LaravelEnvironment.kt`, `WebViewManager.kt`) di-commit secara selektif. Terapkan ulang patch setelah upgrade dan jangan commit `nativephp/android/gradle.properties` karena memuat password signing.
-5. **API key Gemini** berada di dalam APK. Gunakan key terbatas atau proxy backend untuk distribusi eksternal.
+4. **Perubahan pada folder `nativephp/android`** dapat tertimpa saat upgrade NativePHP atau `native:install --force`. Folder `nativephp/` diabaikan Git, tetapi empat file patch (`AndroidManifest.xml`, `MainActivity.kt`, `LaravelEnvironment.kt`, `WebViewManager.kt`) di-commit secara selektif. Terapkan ulang patch setelah upgrade dan jangan commit `nativephp/android/gradle.properties` karena dapat memuat konfigurasi signing.
+5. **Tidak ada API key di APK.** Analisis AI memakai proxy backend; kunci Gemini hanya ada di environment server. Variabel sensitif dibersihkan dari bundle melalui `cleanup_env_keys`.
 6. **Uji di perangkat nyata.** Emulator tidak mereproduksi perilaku HyperOS (dark mode algoritmik, split-screen, gestur back).

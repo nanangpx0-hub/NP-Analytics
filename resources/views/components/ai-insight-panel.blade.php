@@ -7,7 +7,7 @@
 
 @php
     $sourceLabels = [
-        'gemini' => 'Gemini',
+        'gemini' => 'AI Server',
         'cache' => 'Tersimpan offline',
         'local' => 'Analisis lokal',
     ];
@@ -29,7 +29,7 @@
                 </svg>
                 Ringkasan &amp; Rekomendasi AI
             </h2>
-            <p class="mt-0.5 text-xs text-slate-300">Powered by Google Gemini &bull; analisis kebijakan daerah</p>
+            <p class="mt-0.5 text-xs text-slate-300">Analisis AI terproteksi server &bull; kebijakan daerah</p>
         </div>
 
         <div class="flex items-center gap-2">
@@ -104,12 +104,12 @@
             <div>
                 <h3 class="text-sm font-bold text-brand-navy">Analisis cerdas untuk pengambilan keputusan</h3>
                 <p class="mt-1 text-sm leading-relaxed text-slate-600">
-                    Gemini merangkum data indikator, histori time-series, dan fenomena lokal menjadi ringkasan eksekutif,
+                    Server menganalisis data indikator, histori time-series, dan fenomena lokal menjadi ringkasan eksekutif,
                     analisis akar masalah, serta rekomendasi kebijakan daerah. Hasil analisis disimpan di SQLite perangkat
                     sehingga tetap dapat dibaca saat offline.
                 </p>
                 @if(!$configured)
-                    <p class="mt-2 text-xs text-slate-500">GEMINI_API_KEY belum diatur. Tombol analisis akan menghasilkan rangkuman lokal berbasis data.</p>
+                    <p class="mt-2 text-xs text-slate-500">Perangkat belum diaktifkan. Buka Pengaturan Sync untuk menghubungkan perangkat; analisis lokal tetap tersedia.</p>
                 @endif
             </div>
         @endif
