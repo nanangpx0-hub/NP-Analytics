@@ -455,6 +455,8 @@ aplikasi pertama kali dijalankan, lalu migrasi dan seeder dijalankan.
 |------|-------|
 | Lokasi utama | `dist/app-release.apk` |
 | Salinan Gradle | `nativephp/android/app/build/outputs/apk/release/app-release.apk` |
+| Rilis GitHub | `https://github.com/nanangpx0-hub/NP-Analytics/releases/tag/v1.0.0-41` |
+| Unduhan APK | `https://github.com/nanangpx0-hub/NP-Analytics/releases/download/v1.0.0-41/app-release.apk` |
 | Ukuran | 69.196.840 bytes (65,99 MB) |
 | Package | `com.nanang.npanalytics` |
 | versionName | `1.0.0` |
